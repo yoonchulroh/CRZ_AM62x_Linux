@@ -1,0 +1,46 @@
+--- a/Rules.make
++++ b/Rules.make
+@@ -9,9 +9,6 @@
+ # This will be configured with the setup.sh script.
+ EXEC_DIR?=__EXEC_DIR__
+ 
+-#root of the target file system for installing applications
+-DESTDIR?=__DESTDIR__
+-
+ # Root of the boot partition to install boot binaries
+ BOOTFS?=__BOOTFS__
+ 
+@@ -19,7 +16,10 @@
+ 
+ ### TI SDK CONFIG ###
+ #Points to the root of the TI SDK
+-export TI_SDK_PATH?=/home/yoonchulroh/ti-processor-sdk-linux-am62xx-evm-12.01.00.05.03
++export TI_SDK_PATH?=/home/yoonchulroh/CRZ/am62x_20260918
++
++#root of the target file system for installing applications
++DESTDIR?=${TI_SDK_PATH}/image_temp
+ 
+ export LINUX_DEVKIT_PATH=$(TI_SDK_PATH)/linux-devkit
+ export K3_R5_LINUX_DEVKIT_PATH=$(TI_SDK_PATH)/k3r5-devkit
+@@ -27,12 +27,9 @@
+ SDK_PATH_HOST=$(LINUX_DEVKIT_PATH)/sysroots/x86_64-arago-linux
+ 
+ # The source directories for each component
+-ARM_BENCHMARKS_SRC_DIR:=$(shell ls -d $(TI_SDK_PATH)/example-applications/*arm-benchmarks*)
+ CRYPTODEV_SRC_DIR:=$(shell ls -d $(TI_SDK_PATH)/board-support/extra-drivers/cryptodev*)
+ IMG_ROGUE_SRC_DIR:=$(shell ls -d $(TI_SDK_PATH)/board-support/extra-drivers/ti-img-rogue-driver*)
+ UBOOT_SRC_DIR:=$(shell ls -d $(TI_SDK_PATH)/board-support/ti-u-boot*)
+-LINUXKERNEL_INSTALL_DIR:=$(shell ls -d $(TI_SDK_PATH)/board-support/ti-linux-kernel*)
+-TFA_SRC_DIR:=$(shell ls -d $(TI_SDK_PATH)/board-support/trusted-firmware-a*)
+ 
+ export TI_SECURE_DEV_PKG=$(TI_SDK_PATH)/board-support/core-secdev-k3
+ ### PLATFORM CONFIG ###
+@@ -81,6 +78,6 @@
+ WINDOW_SYSTEM=lws-generic
+ PVR_BUILD=release
+ 
+-MAKE_ALL_TARGETS?= arm-benchmarks cryptodev u-boot u-boot-snagboot linux linux-dtbs ti-img-rogue-driver jailhouse linux-extras linux-extras-dtbs u-boot-extras
++MAKE_ALL_TARGETS?= cryptodev u-boot linux linux-dtbs
+ 
+-MAKE_JOBS=32
++MAKE_JOBS=8

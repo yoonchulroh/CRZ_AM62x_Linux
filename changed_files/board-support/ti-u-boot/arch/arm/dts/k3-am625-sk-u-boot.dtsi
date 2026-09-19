@@ -1,0 +1,315 @@
+// SPDX-License-Identifier: GPL-2.0
+/*
+ * Common AM625 SK dts file for SPLs
+ * Copyright (C) 2021-2022 Texas Instruments Incorporated - https://www.ti.com/
+ */
+
+#include "k3-am625-sk-binman.dtsi"
+
+/ {
+	panel_lvds: panel-lvds {
+		bootph-pre-ram;
+		compatible = "simple-panel";
+		status= "okay";
+		width-mm = <217>;
+		height-mm = <136>;
+		data-mapping = "vesa-24";
+		panel-timing {
+			bootph-pre-ram;
+			clock-frequency = <148500>;
+			hactive = <1920>;
+			vactive = <1080>;
+			hback-porch = <104>;
+			hfront-porch = <88>;
+			vback-porch = <36>;
+			vfront-porch = <4>;
+			hsync-len = <88>;
+			vsync-len = <5>;
+			de-active = <1>;
+		};
+	};
+
+	microtips_mf101hie_panel: display {
+		bootph-all;
+		status="okay";
+		compatible = "microtips,mf-101hiebcaf0", "panel-simple";
+		/*
+		* Note that the OLDI TX 0 transmits the odd set of pixels
+		* while the OLDI TX 1 transmits the even set. This is a
+		* fixed configuration in the IP integration and is not
+		* changeable. The properties, "dual-lvds-odd-pixels" and
+		* "dual-lvds-even-pixels" have been used to merely
+		* identify if a Dual Link configuration is required.
+		* Swapping them will cause an error in the dss oldi driver.
+		*/
+		ports {
+			bootph-all;
+			status="okay";
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			port@0 {
+				bootph-all;
+				status="okay";
+				reg = <0>;
+				dual-lvds-odd-pixels;
+				lcd_in0: endpoint {
+				bootph-all;
+				status="okay";
+					remote-endpoint = <&oldi_0_out>;
+				};
+			};
+			port@1 {
+				bootph-all;
+				status="okay";
+				reg = <1>;
+				dual-lvds-even-pixels;
+				lcd_in1: endpoint {
+					bootph-all;
+					status="okay";
+					remote-endpoint = <&oldi_1_out>;
+				};
+			};
+		};
+	};
+};
+
+&dss {
+	bootph-all;
+	status = "okay";
+	ti,am65x-oldi-io-ctrl = <&dss_oldi_io_ctrl>;
+
+	clocks = <&k3_clks 186 6>,
+	 <&k3_clks 186 0>,
+	 <&k3_clks 186 2>;
+};
+
+&oldi0 {
+	bootph-all;
+	status = "okay";
+	ti,companion-oldi = <&oldi1>;
+};
+
+&oldi1 {
+	bootph-all;
+	status = "okay";
+	ti,secondary-oldi;
+	ti,companion-oldi = <&oldi0>;
+};
+
+&oldi0_port0 {
+	bootph-all;
+	oldi_0_in: endpoint {
+		bootph-all;
+		remote-endpoint = <&dpi0_out0>;
+	};
+};
+
+&oldi0_port1 {
+	bootph-all;
+	oldi_0_out: endpoint {
+		bootph-all;
+		remote-endpoint = <&lcd_in0>;
+	};
+};
+
+&oldi1_port0 {
+	bootph-all;
+	oldi_1_in: endpoint {
+		bootph-all;
+		remote-endpoint = <&dpi0_out1>;
+	};
+};
+
+&oldi1_port1 {
+	bootph-all;
+	oldi_1_out: endpoint {
+		bootph-all;
+		remote-endpoint = <&lcd_in1>;
+	};
+};
+
+&dss_ports {
+	bootph-all;
+	status = "okay";
+	#address-cells = <1>;
+	#size-cells = <0>;
+
+	/* VP1: Output to OLDI */
+	port@0 {
+		bootph-all;
+		status = "okay";
+		reg = <0>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		dpi0_out0: endpoint@0 {
+			bootph-all;
+			status = "okay";
+			reg = <0>;
+			remote-endpoint = <&oldi_0_in>;
+		};
+		dpi0_out1: endpoint@1 {
+			bootph-all;
+			status = "okay";
+			reg = <1>;
+			remote-endpoint = <&oldi_1_in>;
+		};
+	};
+};
+
+&main_bcdma {
+	reg = <0x00 0x485c0100 0x00 0x100>,
+	      <0x00 0x4c000000 0x00 0x20000>,
+	      <0x00 0x4a820000 0x00 0x20000>,
+	      <0x00 0x4aa40000 0x00 0x20000>,
+	      <0x00 0x4bc00000 0x00 0x100000>,
+	      <0x00 0x48600000 0x00 0x8000>,
+	      <0x00 0x484a4000 0x00 0x2000>,
+	      <0x00 0x484c2000 0x00 0x2000>;
+	reg-names = "gcfg", "bchanrt", "rchanrt", "tchanrt",
+		    "ringrt" , "cfg", "tchan", "rchan";
+};
+
+&main_pktdma {
+	reg = <0x00 0x485c0000 0x00 0x100>,
+	      <0x00 0x4a800000 0x00 0x20000>,
+	      <0x00 0x4aa00000 0x00 0x20000>,
+	      <0x00 0x4b800000 0x00 0x200000>,
+	      <0x00 0x485e0000 0x00 0x10000>,
+	      <0x00 0x484a0000 0x00 0x2000>,
+	      <0x00 0x484c0000 0x00 0x2000>,
+	      <0x00 0x48430000 0x00 0x1000>;
+	reg-names = "gcfg", "rchanrt", "tchanrt", "ringrt",
+		    "cfg", "tchan", "rchan", "rflow";
+	bootph-all;
+};
+
+&cpsw_port2 {
+	status = "disabled";
+};
+
+&usbss0 {
+	bootph-all;
+};
+
+&usb0 {
+	dr_mode = "peripheral";
+	bootph-all;
+};
+
+&ospi0 {
+	flash@0 {
+		spi-max-frequency = <25000000>;
+	};
+};
+
+
+#ifdef CONFIG_NAND_OMAP_GPMC
+&elm0 {
+	bootph-pre-ram;
+	status = "okay";
+};
+
+&main_pmx0 {
+	gpmc0_pins_default: gpmc0-pins-default {
+	    	pinctrl-single,pins = <
+		    	AM62X_IOPAD(0x003c, PIN_INPUT, 0) /* (M25) GPMC0_AD0 */
+		    	AM62X_IOPAD(0x0040, PIN_INPUT, 0) /* (N23) GPMC0_AD1 */
+		    	AM62X_IOPAD(0x0044, PIN_INPUT, 0) /* (N24) GPMC0_AD2 */
+		    	AM62X_IOPAD(0x0048, PIN_INPUT, 0) /* (N25) GPMC0_AD3 */
+		    	AM62X_IOPAD(0x004c, PIN_INPUT, 0) /* (P24) GPMC0_AD4 */
+		    	AM62X_IOPAD(0x0050, PIN_INPUT, 0) /* (P22) GPMC0_AD5 */
+		    	AM62X_IOPAD(0x0054, PIN_INPUT, 0) /* (P21) GPMC0_AD6 */
+		    	AM62X_IOPAD(0x0058, PIN_INPUT, 0) /* (R23) GPMC0_AD7 */
+		    	AM62X_IOPAD(0x0084, PIN_OUTPUT, 0) /* (L23) GPMC0_ADVn_ALE */
+		    	AM62X_IOPAD(0x0088, PIN_OUTPUT, 0) /* (L24) GPMC0_OEn_REn */
+		    	AM62X_IOPAD(0x008c, PIN_OUTPUT, 0) /* (L25) GPMC0_WEn */
+		    	AM62X_IOPAD(0x0090, PIN_OUTPUT, 0) /* (M24) GPMC0_BE0n_CLE */
+		    	AM62X_IOPAD(0x00a8, PIN_OUTPUT, 0) /* (M21) GPMC0_CSn0 */
+		    	AM62X_IOPAD(0x0098, PIN_INPUT, 0) /* (U23) GPMC0_WAIT0 */
+		>;
+		bootph-pre-ram;
+	};
+};
+
+&gpmc0 {
+	pinctrl-names = "default";
+	status = "okay";
+	pinctrl-0 = <&gpmc0_pins_default>;
+	ranges = <0 0 0x00 0x51000000 0x01000000>; /* CS0 space. Min partition = 16MB */
+	#address-cells = <2>;
+	#size-cells = <1>;
+	bootph-pre-ram;
+
+	nand0_0: nand@0,0 {
+		compatible = "ti,am64-nand";
+		reg = <0 0 64>;         /* device IO registers */
+		interrupt-parent = <&gpmc0>;
+		interrupts = <0 IRQ_TYPE_NONE>, /* fifoevent */
+			    	 <1 IRQ_TYPE_NONE>; /* termcount */
+		rb-gpios = <&gpmc0 0 GPIO_ACTIVE_HIGH>; /* gpmc_wait0 */
+		ti,nand-xfer-type = "prefetch-polled";
+		ti,nand-ecc-opt = "bch8";       /* BCH8: Bootrom limitation */
+		ti,elm-id = <&elm0>;
+		nand-bus-width = <8>;
+		gpmc,device-width = <1>;
+		gpmc,sync-clk-ps = <0>;
+		gpmc,cs-on-ns = <0>;
+		gpmc,cs-rd-off-ns = <40>;
+		gpmc,cs-wr-off-ns = <40>;
+		gpmc,adv-on-ns = <0>;
+		gpmc,adv-rd-off-ns = <25>;
+		gpmc,adv-wr-off-ns = <25>;
+		gpmc,we-on-ns = <0>;
+		gpmc,we-off-ns = <20>;
+		gpmc,oe-on-ns = <3>;
+		gpmc,oe-off-ns = <30>;
+		gpmc,access-ns = <30>;
+		gpmc,rd-cycle-ns = <40>;
+		gpmc,wr-cycle-ns = <40>;
+		gpmc,bus-turnaround-ns = <0>;
+		gpmc,cycle2cycle-delay-ns = <0>;
+		gpmc,clk-activation-ns = <0>;
+		gpmc,wr-access-ns = <40>;
+		gpmc,wr-data-mux-bus-ns = <0>;
+		bootph-pre-ram;
+
+		partitions {
+			compatible = "fixed-partitions";
+			#address-cells = <1>;
+			#size-cells = <1>;
+
+			partition@0 {
+				label = "NAND.tiboot3";
+				reg = <0x00000000 0x00200000>;  /* 2M */
+			};
+			partition@200000 {
+				label = "NAND.tispl";
+				reg = <0x00200000 0x00200000>;  /* 2M */
+			};
+			partition@400000 {
+				label = "NAND.tiboot3.backup";  /* 2M */
+				reg = <0x00400000 0x00200000>;  /* BootROM looks at 4M */
+			};
+			partition@600000 {
+				label = "NAND.u-boot";
+				reg = <0x00600000 0x00400000>;  /* 4M */
+			};
+			partition@a00000 {
+				label = "NAND.u-boot-env";
+				reg = <0x00a00000 0x00040000>;  /* 256K */
+			};
+			partition@a40000 {
+				label = "NAND.u-boot-env.backup";
+				reg = <0x00a40000 0x00040000>;  /* 256K */
+			};
+			partition@a80000 {
+				label = "NAND.file-system";
+				reg = <0x00a80000 0xf580000>;
+			};
+		};
+	};
+};
+
+#endif

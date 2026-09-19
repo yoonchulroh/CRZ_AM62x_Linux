@@ -1,0 +1,47 @@
+# ---- macOS ----
+.DS_Store
+.DS_Store?
+._*
+.AppleDouble
+.LSOverride
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.fseventsd
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+Icon[\r]
+.apdisk
+# Files that might appear on external disks (FAT/SD cards)
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+
+# ---- Linux / Ubuntu ----
+*~
+.directory
+.Trash-*
+.fuse_hidden*
+.nfs*
+.cache/
+
+# ---- Editors / IDEs ----
+.vscode/
+.idea/
+*.swp
+*.swo
+*.swn
+.*.sw[a-p]
+tags
+cscope.out
+cscope.*.out
+compile_commands.json
+.clangd/
+
+# ---- Build / patch leftovers ----
+*.o
+*.a
+*.orig
+*.rej
+*.log
