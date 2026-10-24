@@ -1,0 +1,15 @@
+[Unit]
+Description=AER module 6-1: dashboard on the LCD (Weston client)
+Documentation=file:/usr/local/share/aer/README.md
+PartOf=aer.target
+After=weston.service
+
+[Service]
+ExecStart=/usr/local/bin/aer-display
+# Weston runs as mango (see weston.service); the client must use its session
+User=mango
+RestartSec=3
+Restart=always
+
+[Install]
+WantedBy=aer.target

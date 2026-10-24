@@ -1,0 +1,114 @@
+--- a/board-support/ti-linux-kernel/arch/arm64/boot/dts/ti/k3-am625-sk-common.dtsi
++++ b/board-support/ti-linux-kernel/arch/arm64/boot/dts/ti/k3-am625-sk-common.dtsi
+@@ -17,6 +17,7 @@
+ 		};
+ 	};
+ 
++#if 0
+ 	vmain_pd: regulator-0 {
+ 		/* TPS65988 PD CONTROLLER OUTPUT */
+ 		compatible = "regulator-fixed";
+@@ -91,8 +92,20 @@
+ 		regulator-always-on;
+ 		regulator-boot-on;
+ 	};
++#endif
++
++	lcd_bl: backlight {
++		compatible = "pwm-backlight";
++		pwms = <&epwm0 0 50000 0>;
++		brightness-levels =
++			<0 32 64 96 128 160 192 224 255>;
++		default-brightness-level = <8>;
++	};
+ };
+ 
++/delete-node/ &hdmi0;
++/delete-node/ &codec_audio;
++
+ &main_pmx0 {
+ 	main_mmc0_pins_default: main-mmc0-default-pins {
+ 		bootph-all;
+@@ -141,6 +154,34 @@
+ 		>;
+ 		bootph-all;
+ 	};
++
++	main_usb0_pins_default: main-usb0-pins-default {
++	    pinctrl-single,pins = <
++            AM62X_IOPAD(0x254, PIN_OUTPUT, 0) /* (C20) USB0_DRVVBUS */
++	    >;
++    };
++
++	main_epwm0_pins_default: main-epwm0-pins-default {
++		pinctrl-single,pins = <
++			AM62X_IOPAD(0x01ac, PIN_OUTPUT, 6) /* (E19) MCASP0_AFSR.EHRPWM0_A */
++		>;
++	};
++};
++
++/* Replaces the stock SK LED mux (GPIO1_49); GPIO0_36 is the panel enable */
++&usr_led_pins_default {
++	pinctrl-single,pins = <
++		AM62X_IOPAD(0x034, PIN_OUTPUT, 7) /* (H21) OSPI0_CSn2.GPIO0_13 */
++		AM62X_IOPAD(0x000, PIN_OUTPUT, 7) /* (H24) OSPI0_CLK.GPIO0_0 */
++		AM62X_IOPAD(0x038, PIN_OUTPUT, 7) /* (E24) OSPI0_CSn3.GPIO0_14 */
++		AM62X_IOPAD(0x094, PIN_OUTPUT, 7) /* (N20) GPMC0_BE1n.GPIO0_36 */
++	>;
++};
++
++&epwm0 {
++	pinctrl-names = "default";
++	pinctrl-0 = <&main_epwm0_pins_default>;
++	status = "okay";
+ };
+ 
+ &main_gpio0 {
+@@ -151,7 +192,28 @@
+ 	bootph-all;
+ };
+ 
++&usb0 {
++    pinctrl-names = "default";
++    pinctrl-0 = <&main_usb0_pins_default>;
++ 
++ 	/delete-property/#address-cells;
++	/delete-property/#size-cells;
++	/delete-node/ port;
++};
++
++&dss {
++	pixel-format = "BGR24";
++};
++
++&main_i2c0 {
++	/delete-node/ tps6598x@3f;
++};
++
+ &main_i2c1 {
++// delete GPIO expander
++	/delete-node/ bridge-hdmi@3b;
++	/delete-node/ audio-codec@1b;
++/*
+ 	exp1: gpio@22 {
+ 		compatible = "ti,tca6424";
+ 		reg = <0x22>;
+@@ -177,6 +239,7 @@
+ 				   "TSINT#", "IO_EXP_TEST_LED";
+ 		bootph-all;
+ 	};
++*/
+ };
+ 
+ &sdhci0 {
+@@ -189,8 +252,8 @@
+ };
+ 
+ &sdhci1 {
+-	vmmc-supply = <&vdd_mmc1>;
+-	vqmmc-supply = <&vdd_sd_dv>;
++	/delete-property/ vmmc-supply;
++	/delete-property/ vqmmc-supply;
+ };
+ 
+ &cpsw3g {

@@ -1,0 +1,15 @@
+[Unit]
+Description=AER module 5: event detection
+Documentation=file:/usr/local/share/aer/README.md
+PartOf=aer.target
+
+[Service]
+ExecStart=/usr/local/bin/aer-detect
+DynamicUser=yes
+RuntimeDirectory=aer/detect
+RuntimeDirectoryMode=0755
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=aer.target

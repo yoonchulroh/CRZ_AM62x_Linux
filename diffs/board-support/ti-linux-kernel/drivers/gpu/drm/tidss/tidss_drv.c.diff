@@ -1,0 +1,33 @@
+--- a/board-support/ti-linux-kernel/drivers/gpu/drm/tidss/tidss_drv.c
++++ b/board-support/ti-linux-kernel/drivers/gpu/drm/tidss/tidss_drv.c
+@@ -373,6 +373,9 @@
+ 	int ret;
+ 	int irq;
+ 
++	struct device_node *np = dev->of_node;
++	const char *pixfmt;
++
+ 	dev_dbg(dev, "%s\n", __func__);
+ 
+ 	tidss = devm_drm_dev_alloc(&pdev->dev, &tidss_driver,
+@@ -400,11 +403,20 @@
+ 	}
+ 
+ 	ret = dispc_init(tidss);
++
+ 	if (ret) {
+ 		dev_err(dev, "failed to initialize dispc: %d\n", ret);
+ 		goto err_detach_pm_domains;
+ 	}
+ 
++	ret = of_property_read_string(np, "pixel-format", &pixfmt);
++	if (ret) {
++		dev_err(dev, "get of property pixel-format fail\n");
++		goto err_detach_pm_domains;
++	}
++
++	strcpy(tidss->pixfmt, pixfmt);
++
+ 	check_for_simplefb_device(tidss);
+ 
+ 	ret = tidss_oldi_init(tidss);

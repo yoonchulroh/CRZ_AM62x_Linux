@@ -1,0 +1,13 @@
+--- a/board-support/ti-u-boot/dts/upstream/src/arm64/ti/k3-am625-sk.dts
++++ b/board-support/ti-u-boot/dts/upstream/src/arm64/ti/k3-am625-sk.dts
+@@ -15,8 +15,8 @@
+ 	model = "Texas Instruments AM625 SK";
+ 
+ 	memory@80000000 {
+-		/* 2G RAM */
+-		reg = <0x00000000 0x80000000 0x00000000 0x80000000>;
++		/* 1G RAM */
++		reg = <0x00000000 0x80000000 0x00000000 0x40000000>;
+ 		device_type = "memory";
+ 		bootph-pre-ram;
+ 	};

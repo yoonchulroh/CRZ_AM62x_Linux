@@ -1,22 +1,33 @@
 #!/bin/sh
 #
-# apply_change.sh -- apply the CRZ AM62x changes to a stock TI Processor SDK.
+# apply_change.sh -- turn a stock TI Processor SDK into the CRZ AM62x tree
+# (am62x_20260918).
 #
 # Usage:  ./apply_change.sh /path/to/ti-processor-sdk-linux-am62xx-evm-12.01.00.05.03
 #
-# Idempotent: re-running on an already-patched SDK detects this and stops
-# without touching anything. Use --force to re-apply anyway.
+# Steps, in order:
+#   1. patches/*.patch     modify stock files
+#   2. deleted_files.txt   delete stock files/dirs that am62x_20260918 lacks
+#   3. rename versioned source dirs to the names am62x_20260918 uses
+#   4. overlay/            copy in files that are not in the stock SDK
+#   5. point TI_SDK_PATH in Rules.make at the given SDK path
+#
+# Everything is checked before anything is touched, so a failed check leaves
+# the SDK as it was. Re-running on an already converted SDK does nothing.
 
 set -e
 
 SDK_VERSION="12.01.00.05.03"
 HERE=$(cd "$(dirname "$0")" && pwd)
 
-FORCE=0
+# stock name -> am62x_20260918 name, under board-support/
+RENAMES="ti-u-boot-2026.01+git:ti-u-boot
+ti-linux-kernel-6.18.38+git-ti:ti-linux-kernel
+trusted-firmware-a-2.15+git:trusted-firmware"
+
 SDK=""
 for arg in "$@"; do
 	case "$arg" in
-	--force) FORCE=1 ;;
 	-h|--help)
 		sed -n '2,/^$/p' "$0" | grep '^#' | sed 's/^# \{0,1\}//'
 		exit 0
@@ -26,6 +37,9 @@ for arg in "$@"; do
 done
 
 die() { echo "error: $*" >&2; exit 1; }
+
+# Entries of deleted_files.txt, without comments and blank lines.
+deleted_paths() { grep -v -e '^#' -e '^[[:space:]]*$' "$HERE/deleted_files.txt"; }
 
 [ -n "$SDK" ] || die "no SDK path given. Try: $0 --help"
 [ -d "$SDK" ] || die "not a directory: $SDK"
@@ -37,10 +51,13 @@ SDK=$(cd "$SDK" && pwd)
 
 [ -f "$SDK/Rules.make" ] || die "$SDK does not look like a TI SDK (no Rules.make)"
 
-# The SDK Makefiles locate u-boot with a glob, so the exact suffix may vary
-# between point releases; resolve it rather than hard-coding it.
-UBOOT_DIR=$(ls -d "$SDK"/board-support/ti-u-boot* 2>/dev/null | head -1)
-[ -n "$UBOOT_DIR" ] || die "no board-support/ti-u-boot* found under $SDK"
+# Refuse to double-apply: the renamed u-boot dir only exists after conversion.
+if [ -d "$SDK/board-support/ti-u-boot" ] &&
+   [ ! -e "$SDK/board-support/ti-u-boot-2026.01+git" ]; then
+	echo "This SDK already has the CRZ changes applied (board-support/ti-u-boot"
+	echo "exists). Nothing to do."
+	exit 0
+fi
 
 # The manifest carries no version string, but a stock Rules.make ships with
 # TI_SDK_PATH defaulting to the versioned install directory. Fall back to the
@@ -48,29 +65,35 @@ UBOOT_DIR=$(ls -d "$SDK"/board-support/ti-u-boot* 2>/dev/null | head -1)
 if ! grep -qs "$SDK_VERSION" "$SDK/Rules.make" &&
    ! echo "$SDK" | grep -qs "$SDK_VERSION"; then
 	echo "warning: cannot confirm this is SDK $SDK_VERSION."
-	echo "         These patches were generated against $SDK_VERSION and may"
+	echo "         These changes were generated against $SDK_VERSION and may"
 	echo "         not apply cleanly to another release."
 fi
 
 ###############################################################################
-# Refuse to double-apply
+# Check everything first, so a failure leaves the SDK untouched
 ###############################################################################
 
-if [ "$FORCE" -eq 0 ] &&
-   grep -qs 'CONFIG_NAND_BOOT=y' "$UBOOT_DIR/configs/am62x_evm_a53_defconfig"; then
-	echo "This SDK already has the CRZ changes applied (NAND boot present in"
-	echo "am62x_evm_a53_defconfig). Nothing to do. Use --force to re-apply."
-	exit 0
-fi
+echo "==> checking $SDK"
 
-###############################################################################
-# Dry run everything first, so a failure leaves the SDK untouched
-###############################################################################
-
-echo "==> checking patches against $SDK"
 for p in "$HERE"/patches/*.patch; do
 	patch --dry-run -s -d "$SDK" -p1 < "$p" ||
 		die "$(basename "$p") does not apply cleanly. SDK left untouched."
+done
+
+for r in $RENAMES; do
+	from=${r%%:*}; to=${r#*:}
+	[ -d "$SDK/board-support/$from" ] ||
+		die "board-support/$from not found. SDK left untouched."
+	[ ! -e "$SDK/board-support/$to" ] ||
+		die "board-support/$to already exists. SDK left untouched."
+done
+
+deleted_paths | while IFS= read -r p; do
+	case "$p" in
+	/*|*..*) die "refusing unsafe path in deleted_files.txt: $p" ;;
+	esac
+	[ -e "$SDK/$p" ] || [ -L "$SDK/$p" ] ||
+		echo "    note: $p already absent"
 done
 
 ###############################################################################
@@ -81,6 +104,19 @@ echo "==> applying patches"
 for p in "$HERE"/patches/*.patch; do
 	echo "    $(basename "$p")"
 	patch -s -d "$SDK" -p1 < "$p"
+done
+
+echo "==> deleting files not in am62x_20260918"
+deleted_paths | while IFS= read -r p; do
+	echo "    $p"
+	rm -rf -- "$SDK/$p"
+done
+
+echo "==> renaming source directories"
+for r in $RENAMES; do
+	from=${r%%:*}; to=${r#*:}
+	echo "    board-support/$from -> $to"
+	mv -- "$SDK/board-support/$from" "$SDK/board-support/$to"
 done
 
 echo "==> copying overlay files"
@@ -96,7 +132,6 @@ sed -i "s|^export TI_SDK_PATH?=.*|export TI_SDK_PATH?=$SDK|" "$SDK/Rules.make"
 echo
 echo "Done. Next:"
 echo "    cd $SDK"
-echo "    ./build.sh uboot"
+echo "    ./build.sh all"
 echo
-echo "Note: build.sh also copies boot images to /nfs/am62x (IMAGE_DIR2)."
-echo "Edit that line in $SDK/build.sh if you do not have that NFS export."
+echo "See README.md for flashing the SD card."

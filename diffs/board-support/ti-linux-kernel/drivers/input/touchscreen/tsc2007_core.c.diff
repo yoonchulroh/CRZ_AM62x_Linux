@@ -1,0 +1,12 @@
+--- a/board-support/ti-linux-kernel/drivers/input/touchscreen/tsc2007_core.c
++++ b/board-support/ti-linux-kernel/drivers/input/touchscreen/tsc2007_core.c
+@@ -378,6 +378,9 @@
+ 		}
+ 
+ 		tsc2007_stop(ts);
++	} else {
++		tsc2007_xfer(ts, ADC_ON_12BIT);
++		return -ENODEV;
+ 	}
+ 
+ 	/* power down the chip (TSC2007_SETUP does not ACK on I2C) */

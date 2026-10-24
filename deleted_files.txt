@@ -1,0 +1,20 @@
+# Paths (relative to a stock SDK 12.01.00.05.03, before renames) that
+# apply_change.sh deletes, because they are not in am62x_20260918.
+# Directories are removed recursively.
+board-support/extra-drivers/cryptodev-module-1.14/.git
+board-support/extra-drivers/jailhouse-0.12+git/.git
+board-support/extra-drivers/ti-img-rogue-driver-26.1.6967606/.git
+board-support/linux-extras-6.18.38+git-ti
+board-support/optee-os-4.10.0+git
+board-support/ti-linux-kernel-6.18.38+git-ti/.git
+board-support/ti-u-boot-2026.01+git/.git
+board-support/trusted-firmware-a-2.15+git/.git
+board-support/u-boot-extras-jailhouse-2026.01+git
+example-applications
+filesystem
+makerules/Makefile_arm-benchmarks
+makerules/Makefile_jailhouse
+makerules/Makefile_linux-extras
+makerules/Makefile_linux-extras-dtbs
+makerules/Makefile_ti-img-rogue-driver
+makerules/Makefile_u-boot-extras

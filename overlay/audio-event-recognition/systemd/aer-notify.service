@@ -1,0 +1,14 @@
+[Unit]
+Description=AER module 6-2: MQTT notifications
+Documentation=file:/usr/local/share/aer/README.md
+PartOf=aer.target
+After=network.target aer-broker.service
+
+[Service]
+ExecStart=/usr/local/bin/aer-notify
+DynamicUser=yes
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=aer.target

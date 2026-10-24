@@ -865,20 +865,16 @@ int do_board_detect_am6(void)
 
 	return ret;
 #else
- #define BOOT_DEVICE_EMMC        0x09
- #define BOOT_DEVICE_NAND        0x0B
+	#define BOOT_DEVICE_EMMC        0x09
 
 	u32 devstat = readl(CTRLMMR_MAIN_DEVSTAT);
 	u32 bootmode = (devstat & MAIN_DEVSTAT_PRIMARY_BOOTMODE_MASK) >>
-				MAIN_DEVSTAT_PRIMARY_BOOTMODE_SHIFT;
+					MAIN_DEVSTAT_PRIMARY_BOOTMODE_SHIFT;
 
 	switch (bootmode) {
 	case BOOT_DEVICE_EMMC:
 		env_set("mmcdev", "0");
 		env_set("bootpart", "0:1");
-		break;
-	case BOOT_DEVICE_NAND:
-		env_set("boot", "nand");
 		break;
 	default:
 		break;

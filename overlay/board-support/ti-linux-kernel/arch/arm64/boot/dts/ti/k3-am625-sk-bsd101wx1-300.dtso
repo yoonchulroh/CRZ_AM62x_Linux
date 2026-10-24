@@ -1,0 +1,82 @@
+/dts-v1/;
+/plugin/;
+
+#include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/interrupt-controller/irq.h>
+#include "k3-pinctrl.h"
+
+/ {
+	fragment@0 {
+		target-path = "/";
+		__overlay__ {
+			display {
+				compatible = "bestar,bsd101wx1-300";
+				backlight = <&lcd_bl>;
+				enable-gpios = <&main_gpio0 36 GPIO_ACTIVE_HIGH>;      /* 0x24 */
+
+				port {
+					lcd_in0: endpoint {
+						remote-endpoint = <&dpi1_out>;
+					};
+				};
+			};
+		};
+	};
+
+	fragment@1 {
+		target = <&main_pmx0>;
+		__overlay__ {
+			mango_ts_pins_default: mango_ts-pins-default {
+				pinctrl-single,pins = <
+					AM62X_IOPAD(0x0a4, PIN_INPUT, 7)   /* (M22) GPMC0_DIR.GPIO0_40  touch IRQ   (0x50007) */
+					AM62X_IOPAD(0x07c, PIN_OUTPUT, 7)  /* (P25) GPMC0_CLK.GPIO0_31  touch RESET (0x10007) */
+				>;
+			};
+		};
+	};
+
+	fragment@2 {
+		target = <&main_i2c1>;
+		__overlay__ {
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			touchscreen_ts2007: tsc2007@4a {
+				compatible = "ti,tsc2007";
+				reg = <0x4a>;
+				gpios = <&main_gpio0 40 GPIO_ACTIVE_LOW>;             /* pendown */
+				ti,x-plate-ohms = <660>;                              /* 0x294 */
+				linux,wakeup;
+			};
+
+			touchscreen_ft5305: edt-ft5306@38 {
+				status = "okay";
+				compatible = "edt,edt-ft5306", "edt,edt-ft5x06";
+				pinctrl-names = "default";
+				pinctrl-0 = <&mango_ts_pins_default>;
+				reg = <0x38>;
+				interrupt-parent = <&main_gpio0>;
+				interrupts = <40 IRQ_TYPE_EDGE_FALLING>;              /* 0x28 0x02 */
+				reset-gpios = <&main_gpio0 31 GPIO_ACTIVE_LOW>;       /* 0x1f 0x01 */
+				touchscreen-size-x = <1280>;                          /* 0x500 */
+				touchscreen-size-y = <800>;                           /* 0x320 */
+				wakeup-source;
+			};
+		};
+	};
+
+	fragment@3 {
+		target = <&dss_ports>;
+		__overlay__ {
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			port@1 {                                   /* DSS VP2 = parallel DPI (VOUT0) */
+				reg = <1>;
+				dpi1_out: endpoint {
+					remote-endpoint = <&lcd_in0>;
+				};
+			};
+		};
+	};
+};

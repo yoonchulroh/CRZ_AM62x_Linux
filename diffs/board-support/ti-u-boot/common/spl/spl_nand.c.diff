@@ -1,0 +1,11 @@
+--- a/board-support/ti-u-boot/common/spl/spl_nand.c
++++ b/board-support/ti-u-boot/common/spl/spl_nand.c
+@@ -16,6 +16,8 @@
+ #include <linux/libfdt_env.h>
+ #include <fdt.h>
+ 
++#define BOOT_DEVICE_NAND 0x0B
++
+ uint32_t __weak spl_nand_get_uboot_raw_page(void)
+ {
+ 	return CONFIG_SYS_NAND_U_BOOT_OFFS;

@@ -3,8 +3,13 @@
 # U-Boot-only variant of create-sdcard_ubuntu.sh
 #
 # Writes ONLY the FAT boot partition (tiboot3.bin / tispl.bin / u-boot.img).
-# The rootfs partition is created and formatted when partitioning, but is
-# never populated: no rootfs.tar.gz, no custom_datafs, no kernel/dtb.
+# The card is always wiped and re-partitioned from sd.dump, so the result
+# does not depend on what was flashed before.  The rootfs partition is
+# formatted but left empty: no rootfs.tar.gz, no custom_datafs, no kernel/dtb.
+#
+# Keeping an old rootfs is NOT harmless: the default bootcmd loads
+# /boot/Image and /boot/dtb/ from mmc 1:2, so a leftover rootfs gets booted
+# by the new u-boot and hides whether the u-boot build itself is good.
 #
 # On AM62x SD boot the ROM reads tiboot3.bin from partition 1, R5 SPL then
 # loads tispl.bin and u-boot.img from the same partition.  Nothing else is
@@ -130,7 +135,6 @@ do
 done
 
 DRIVE=/dev/$DEVICEDRIVENAME
-NUM_OF_DRIVES=`df | grep -c $DEVICEDRIVENAME`
 
 # This if statement will determine if we have a mounted sdX or mmcblkX device.
 # If it is mmcblkX, then we need to set an extra char in the partition names, 'p',
@@ -143,93 +147,88 @@ else
 	P='p'
 fi
 
-if [ "$NUM_OF_DRIVES" != "0" ]; then
-        echo "Unmounting the $DEVICEDRIVENAME drives"
-        for ((c=1; c<="$NUM_OF_DRIVES"; c++ ))
-        do
-                unmounted=`df | grep '\<'$DEVICEDRIVENAME$P$c'\>' | awk '{print $1}'`
-                if [ -n "$unmounted" ]
-                then
-                     echo " unmounted ${DRIVE}$P$c"
-                     umount -f ${DRIVE}$P$c
-                fi
-
-        done
-fi
-
-# check to see if the device is already partitioned the way we expect
-for ((  c=1; c<5; c++ ))
-do
-	eval "SIZE$c=`cat /proc/partitions | grep -v $ROOTDRIVE | grep '\<'$DEVICEDRIVENAME$P$c'\>'  | awk '{print $3}'`"
-done
-
-PARTITION=0
-if [ -n "$SIZE1" -a -n "$SIZE2" ] ; then
-	if  [ "$SIZE1" -gt "72000" -a "$SIZE2" -gt "700000" ]
-	then
-		PARTITION=1
-	fi
-fi
-
-if [ "$PARTITION" -eq "1" ]
-then
-cat << EOM
-
-################################################################################
-
-   Detected device is already partitioned for boot + rootfs
-
-   U-Boot only needs partition 1, so re-partitioning is normally unnecessary.
-   Keeping the partitions preserves whatever rootfs is already on the card.
-
-################################################################################
-
-EOM
-	ENTERCORRECTLY=0
-	while [ $ENTERCORRECTLY -ne 1 ]
-	do
-		read -p 'Would you like to re-partition the drive anyways [y/N] : ' CASEPARTITION
-		echo " "
-		ENTERCORRECTLY=1
-		case $CASEPARTITION in
-		"y")  echo "Now partitioning $DEVICEDRIVENAME ...";PARTITION=2;;
-		"n"|"") echo "Skipping partitioning";PARTITION=1;;
-		*)  echo "Please enter y or n";ENTERCORRECTLY=0;;
-		esac
-		echo ""
+# Unmount every partition of the card, whatever its number and however often
+# it is mounted (desktop auto-mount, a previous run, ...)
+unmount_all()
+{
+	for part in `lsblk -lnpo NAME $DRIVE` ; do
+		while findmnt -rn -S $part > /dev/null ; do
+			echo " unmounting $part"
+			if ! umount $part ; then
+				echo "	**** Error *** could not unmount $part"
+				exit 1
+			fi
+		done
 	done
-fi
+}
 
-if [ "$PARTITION" -eq "0" ]
-then
 cat << EOM
 
 ################################################################################
 
-	SD card is not partitioned as expected, it will be re-partitioned
-	with the usual 2 partitions (boot + rootfs) from $SD_DUMP_FILE
+	$DRIVE will be wiped completely and re-partitioned from $SD_DUMP_FILE:
+
+	    partition 1  FAT32 "boot"    tiboot3.bin, tispl.bin, u-boot.img
+	    partition 2  ext3  "rootfs"  empty
+
+	Nothing from a previous flash is kept (old partition table, boot
+	files, rootfs, kernel), so the card always comes out the same.
 
 	****WARNING**** continuing will erase all data on $DEVICEDRIVENAME
 
 ################################################################################
 
 EOM
-	ENTERCORRECTLY=0
-	while [ $ENTERCORRECTLY -ne 1 ]
-	do
-		read -p 'Continue? [y/n] : ' EXITQ
-		echo " "
-		ENTERCORRECTLY=1
-		case $EXITQ in
-		"y") PARTITION=2;;
-		"n") exit 1;;
-		*)  echo "Please enter y or n";ENTERCORRECTLY=0;;
-		esac
-	done
+ENTERCORRECTLY=0
+while [ $ENTERCORRECTLY -ne 1 ]
+do
+	read -p 'Continue? [y/n] : ' EXITQ
+	echo " "
+	ENTERCORRECTLY=1
+	case $EXITQ in
+	"y") ;;
+	"n") exit 1;;
+	*)  echo "Please enter y or n";ENTERCORRECTLY=0;;
+	esac
+done
+
+unmount_all
+
+cat << EOM
+
+################################################################################
+
+		Wiping $DRIVE
+
+################################################################################
+
+EOM
+
+# Partitions first - once the partition table is gone their filesystem
+# signatures can no longer be found.  Then the whole disk, which removes the
+# MBR/GPT including GPT's backup header at the end of the card.
+for part in `lsblk -lnpo NAME $DRIVE | tail -n +2` ; do
+	if ! wipefs -a $part ; then
+		echo "	**** Error *** wiping $part failed"
+		exit 1
+	fi
+done
+if ! wipefs -a $DRIVE ; then
+	echo "	**** Error *** wiping $DRIVE failed"
+	exit 1
 fi
 
-if [ "$PARTITION" -eq "2" ]
-then
+# Zero the first 16 MiB (MBR, the gap in front of partition 1, the start of
+# partition 1) and the last 1 MiB, so nothing an earlier layout wrote outside
+# a filesystem - raw bootloader images, stale partition tables - survives.
+SECTORS=`blockdev --getsz $DRIVE`
+dd if=/dev/zero of=$DRIVE bs=1M count=16 conv=fsync status=none && \
+dd if=/dev/zero of=$DRIVE bs=512 seek=$((SECTORS - 2048)) count=2048 conv=fsync status=none
+if [ $? -ne 0 ] ; then
+	echo "	**** Error *** zeroing $DRIVE failed"
+	exit 1
+fi
+
 cat << EOM
 
 ################################################################################
@@ -245,14 +244,22 @@ echo DISK SIZE - $SIZE bytes
 
 # Feed sfdisk the layout from sd.dump with the device names stripped, so the
 # same layout applies to /dev/sdX and /dev/mmcblkX alike.
-sed -e '/^device:/d' -e 's|^/dev/[a-z0-9]* *: *||' $SD_DUMP_FILE | sfdisk $DRIVE
+sed -e '/^device:/d' -e 's|^/dev/[a-z0-9]* *: *||' $SD_DUMP_FILE | \
+	sfdisk --wipe always --wipe-partitions always $DRIVE
 if [ $? -ne 0 ] ; then
 	echo "	**** Error *** partitioning $DRIVE failed"
 	exit 1
 fi
 
 partprobe $DRIVE 2>/dev/null
-sleep 2
+udevadm settle
+for n in 1 2 ; do
+	if [ ! -b ${DRIVE}${P}$n ] ; then
+		echo "	**** Error *** ${DRIVE}${P}$n did not appear after partitioning"
+		exit 1
+	fi
+done
+unmount_all
 
 cat << EOM
 
@@ -262,7 +269,10 @@ cat << EOM
 
 ################################################################################
 EOM
-	mkfs.vfat -F 32 -n "boot" ${DRIVE}${P}1
+if ! mkfs.vfat -F 32 -n "boot" ${DRIVE}${P}1 ; then
+	echo "	**** Error *** formatting ${DRIVE}${P}1 failed"
+	exit 1
+fi
 cat << EOM
 
 ################################################################################
@@ -271,10 +281,14 @@ cat << EOM
 
 ################################################################################
 EOM
-	mkfs.ext3 -L "rootfs" ${DRIVE}${P}2
-	sync
-	sync
+# -F: never stop at a "Proceed anyway? (y,N)" prompt - answering it with
+# Enter would leave the old rootfs in place
+if ! mkfs.ext3 -F -L "rootfs" ${DRIVE}${P}2 ; then
+	echo "	**** Error *** formatting ${DRIVE}${P}2 failed"
+	exit 1
 fi
+sync
+unmount_all
 
 echo " "
 echo "Mount the boot partition "
@@ -284,10 +298,6 @@ if [ $? -ne 0 ] ; then
 	echo "	**** Error *** could not mount ${DRIVE}${P}1"
 	exit 1
 fi
-
-echo " "
-echo "Emptying boot partition "
-rm -rf $PATH_TO_SDBOOT/*
 
 TIBOOT3=`ls $BOOTFILEPATH | grep tiboot3 | awk {'print $1'}`
 TISPL=`ls $BOOTFILEPATH | grep tispl | awk {'print $1'}`
@@ -354,6 +364,8 @@ echo " "
 echo "Un-mount the boot partition "
 umount -f $PATH_TO_SDBOOT
 rmdir $PATH_TO_SDBOOT 2>/dev/null
+unmount_all
+sync
 
 if [ "$MISSING" -ne "0" ] ; then
 	echo " "
@@ -368,12 +380,17 @@ cat << EOM
 
    Operation Finished - u-boot images only
 
-   The rootfs partition was NOT written.  U-Boot will reach its prompt and
-   then fail to find a kernel; press a key to stop autoboot and check:
+   The rootfs partition is empty, so there is no kernel on this card.
+   U-Boot will reach its prompt and then fail to find a kernel on mmc1;
+   press a key to stop autoboot and check:
 
        version          - confirms the build you just flashed
        mmc info
        fatls mmc 1:1    - lists the three files written here
+
+   If an OS still boots, autoboot found it on another device - the
+   'bootflow scan' fallback also tries mmc0 (eMMC), usb, pxe and dhcp.
+   The boot log names the device it booted from.
 
 ################################################################################
 

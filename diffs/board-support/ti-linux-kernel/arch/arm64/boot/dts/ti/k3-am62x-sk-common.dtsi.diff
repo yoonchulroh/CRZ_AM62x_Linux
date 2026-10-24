@@ -1,0 +1,39 @@
+--- a/board-support/ti-linux-kernel/arch/arm64/boot/dts/ti/k3-am62x-sk-common.dtsi
++++ b/board-support/ti-linux-kernel/arch/arm64/boot/dts/ti/k3-am62x-sk-common.dtsi
+@@ -576,6 +576,7 @@
+ 	pinctrl-0 = <&main_dss0_pins_default>;
+ };
+ 
++#if 0
+ &dss_ports {
+ 	/* VP2: DPI Output */
+ 	port@1 {
+@@ -586,6 +587,11 @@
+ 		};
+ 	};
+ };
++#endif
++
++&dss_ports {
++	/delete-node/ port@1;
++};
+ 
+ /* mcu_gpio0 and mcu_gpio_intr are reserved for mcu firmware usage */
+ &mcu_gpio0 {
+@@ -604,11 +610,12 @@
+ 	bootph-all;
+ };
+ 
++// ospi0 removed
+ &ospi0 {
+-	bootph-all;
+-	status = "okay";
+-	pinctrl-names = "default";
+-	pinctrl-0 = <&ospi0_pins_default>;
++	/delete-property/ pinctrl-names;
++	/delete-property/ pinctrl-0;
++
++	status = "disabled";
+ };
+ 
+ &ecap0 {

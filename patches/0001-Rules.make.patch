@@ -22,7 +22,7 @@
  
  export LINUX_DEVKIT_PATH=$(TI_SDK_PATH)/linux-devkit
  export K3_R5_LINUX_DEVKIT_PATH=$(TI_SDK_PATH)/k3r5-devkit
-@@ -27,12 +27,9 @@
+@@ -27,12 +27,10 @@
  SDK_PATH_HOST=$(LINUX_DEVKIT_PATH)/sysroots/x86_64-arago-linux
  
  # The source directories for each component
@@ -30,17 +30,27 @@
  CRYPTODEV_SRC_DIR:=$(shell ls -d $(TI_SDK_PATH)/board-support/extra-drivers/cryptodev*)
  IMG_ROGUE_SRC_DIR:=$(shell ls -d $(TI_SDK_PATH)/board-support/extra-drivers/ti-img-rogue-driver*)
  UBOOT_SRC_DIR:=$(shell ls -d $(TI_SDK_PATH)/board-support/ti-u-boot*)
--LINUXKERNEL_INSTALL_DIR:=$(shell ls -d $(TI_SDK_PATH)/board-support/ti-linux-kernel*)
+ LINUXKERNEL_INSTALL_DIR:=$(shell ls -d $(TI_SDK_PATH)/board-support/ti-linux-kernel*)
 -TFA_SRC_DIR:=$(shell ls -d $(TI_SDK_PATH)/board-support/trusted-firmware-a*)
  
  export TI_SECURE_DEV_PKG=$(TI_SDK_PATH)/board-support/core-secdev-k3
  ### PLATFORM CONFIG ###
-@@ -81,6 +78,6 @@
+@@ -50,6 +48,9 @@
+ export CROSS_COMPILE=$(LINUX_DEVKIT_PATH)/sysroots/x86_64-arago-linux/usr/bin/aarch64-oe-linux/aarch64-oe-linux-
+ export CROSS_COMPILE_ARMV7=$(K3_R5_LINUX_DEVKIT_PATH)/sysroots/x86_64-arago-linux/usr/bin/arm-oe-eabi/arm-oe-eabi-
+ 
++# Host tools built by u-boot (mkimage is used to build the kernel fitImage)
++export PATH:=$(TI_SDK_PATH)/board-support/u-boot-build/a53/tools:$(PATH)
++
+ #Default CC value to be used when cross compiling.  This is so that the
+ #GNU Make default of "cc" is not used to point to the host compiler
+ export CC=$(CROSS_COMPILE)gcc --sysroot=$(SDK_PATH_TARGET)
+@@ -81,6 +82,6 @@
  WINDOW_SYSTEM=lws-generic
  PVR_BUILD=release
  
 -MAKE_ALL_TARGETS?= arm-benchmarks cryptodev u-boot u-boot-snagboot linux linux-dtbs ti-img-rogue-driver jailhouse linux-extras linux-extras-dtbs u-boot-extras
-+MAKE_ALL_TARGETS?= cryptodev u-boot linux linux-dtbs
++MAKE_ALL_TARGETS?= u-boot linux linux-dtbs
  
 -MAKE_JOBS=32
-+MAKE_JOBS=8
++MAKE_JOBS?=$(shell nproc)

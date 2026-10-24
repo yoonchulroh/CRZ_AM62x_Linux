@@ -1,0 +1,13 @@
+--- a/image/create-sdcard_ubuntu.sh
++++ b/image/create-sdcard_ubuntu.sh
+@@ -670,7 +670,9 @@
+ sudo tar xvf $ROOTFSUSERFILEPATH -C $PATH_TO_SDROOTFS
+ #mkdir -p $PATH_TO_SDROOTFS/data
+ #sudo cp -a custom_datafs/* $PATH_TO_SDROOTFS/data
+-sudo tar xvf custom_datafs.tar.gz -C $PATH_TO_SDROOTFS
++# --no-overwrite-dir: keep owner/mode of directories that already exist in the
++# rootfs (/, /etc, /usr, ...) instead of taking them from the overlay archive
++sudo tar --no-overwrite-dir -xvf custom_datafs.tar.gz -C $PATH_TO_SDROOTFS
+ 
+ echo ""
+ echo ""

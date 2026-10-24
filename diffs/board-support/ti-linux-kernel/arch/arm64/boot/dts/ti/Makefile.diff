@@ -1,0 +1,10 @@
+--- a/board-support/ti-linux-kernel/arch/arm64/boot/dts/ti/Makefile
++++ b/board-support/ti-linux-kernel/arch/arm64/boot/dts/ti/Makefile
+@@ -20,6 +20,7 @@
+ dtb-$(CONFIG_ARCH_K3) += k3-am625-sk-microtips-mf101hie-panel.dtbo
+ dtb-$(CONFIG_ARCH_K3) += k3-am62x-sk-microtips-mf103hie-lcd2.dtbo
+ dtb-$(CONFIG_ARCH_K3) += k3-am625-sk-rpi-hdr-ehrpwm.dtbo
++dtb-$(CONFIG_ARCH_K3) += k3-am625-sk-bsd101wx1-300.dtbo
+ dtb-$(CONFIG_ARCH_K3) += k3-am625-verdin-nonwifi-dahlia.dtb
+ dtb-$(CONFIG_ARCH_K3) += k3-am625-verdin-nonwifi-dev.dtb
+ dtb-$(CONFIG_ARCH_K3) += k3-am625-verdin-nonwifi-ivy.dtb
