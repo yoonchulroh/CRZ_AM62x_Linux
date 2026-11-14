@@ -98,3 +98,15 @@ sudo ./make_auto_eMMC_fuse_SD.sh
 
 Boot it from SD and log in as `root` on the UART console. The login runs `S99_Fusing_eMMC_FS.sh` to install to eMMC.
 Then power off, remove the SD card, set SW1 to OFF-ON-ON-OFF and power on to boot from eMMC.
+
+## 8. Optional: RT kernel build
+
+To build a PREEMPT_RT kernel, run `rt_change.sh` instead of (or after) step 2.
+
+```
+./rt_change.sh /path/to/ti-processor-sdk-linux-am62xx-evm-12.01.00.05.03
+```
+
+This adds TI's RT config fragment to `Rules.make` and renames the `kernel` build target to `kernel-rt` (`./build.sh kernel` then fails with a message).
+
+Build the kernel with `./build.sh kernel-rt`; `./build.sh all` builds the RT kernel too. On the board, `uname -r` shows `6.18.38-rt`.
