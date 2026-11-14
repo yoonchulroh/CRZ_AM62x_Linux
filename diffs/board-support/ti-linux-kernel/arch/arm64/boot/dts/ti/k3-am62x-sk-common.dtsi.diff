@@ -1,6 +1,44 @@
 --- a/board-support/ti-linux-kernel/arch/arm64/boot/dts/ti/k3-am62x-sk-common.dtsi
 +++ b/board-support/ti-linux-kernel/arch/arm64/boot/dts/ti/k3-am62x-sk-common.dtsi
-@@ -576,6 +576,7 @@
+@@ -221,9 +221,18 @@
+ 		>;
+ 	};
+ 
+-	usr_led_pins_default: usr-led-default-pins {
++	usr_led_pins_default: usr-led-pins-default {
+ 		pinctrl-single,pins = <
+-			AM62X_IOPAD(0x244, PIN_OUTPUT, 7) /* (C17/B15) MMC1_SDWP.GPIO1_49 */
++			AM62X_IOPAD(0x034, PIN_OUTPUT, 7) /* (H21) OSPI0_CSn2.GPIO0_13 */
++			AM62X_IOPAD(0x000, PIN_OUTPUT, 7) /* (H24) OSPI0_CLK.GPIO0_0 */
++			AM62X_IOPAD(0x038, PIN_OUTPUT, 7) /* (E24) OSPI0_CSn3.GPIO0_14 */
++			AM62X_IOPAD(0x094, PIN_OUTPUT, 7) /* (N20) GPMC0_BE1n.GPIO0_36 */
++		>;
++	};
++
++	push_button_pins_default: push-button-pins-default {
++		pinctrl-single,pins = <
++			AM62X_IOPAD(0x244, PIN_INPUT, 7) /* (C17) MMC1_SDWP.GPIO1_49 */
+ 		>;
+ 	};
+ 
+@@ -252,9 +261,15 @@
+ 		>;
+ 	};
+ 
++	main_usb0_pins_default: main-usb0-pins-default {
++	    pinctrl-single,pins = <
++            AM62X_IOPAD(0x254, PIN_INPUT, 7) /* (C20) USB0_DRVVBUS.GPIO1_50 */
++	    >;
++    };
++
+ 	main_usb1_pins_default: main-usb1-default-pins {
+ 		pinctrl-single,pins = <
+-			AM62X_IOPAD(0x0258, PIN_OUTPUT, 0) /* (F18/E16) USB1_DRVVBUS */
++			AM62X_IOPAD(0x0258, PIN_INPUT, 7) /* (F18/E16) USB1_DRVVBUS.GPIO1_51 */
+ 		>;
+ 	};
+ 
+@@ -576,6 +591,7 @@
  	pinctrl-0 = <&main_dss0_pins_default>;
  };
  
@@ -8,7 +46,7 @@
  &dss_ports {
  	/* VP2: DPI Output */
  	port@1 {
-@@ -586,6 +587,11 @@
+@@ -586,6 +602,11 @@
  		};
  	};
  };
@@ -20,7 +58,7 @@
  
  /* mcu_gpio0 and mcu_gpio_intr are reserved for mcu firmware usage */
  &mcu_gpio0 {
-@@ -604,11 +610,12 @@
+@@ -604,11 +625,12 @@
  	bootph-all;
  };
  

@@ -1,0 +1,30 @@
+--- a/board-support/ti-u-boot/arch/arm/mach-k3/common.c
++++ b/board-support/ti-u-boot/arch/arm/mach-k3/common.c
+@@ -478,6 +478,8 @@
+ 	struct blk_desc *dev_desc;
+ 	char bootmedia[32];
+ 	char bootpart[32];
++	char console[32];
++	char optargs[64];
+ 	char str[256];
+ 	int ret;
+ 
+@@ -497,8 +499,16 @@
+ 		return -EOPNOTSUPP;
+ 	}
+ 
+-	snprintf(str, sizeof(str), "console=%s root=PARTUUID=%s rootwait",
+-		 env_get("console"), disk_partition_uuid(&info));
++	/*
++	 * Same as args_mmc in env/ti/mmc.env, with falcon_optargs as optargs.
++	 * Copy each value out: before the env is imported, env_get() returns
++	 * the same buffer for every variable.
++	 */
++	strlcpy(console, env_get("console") ? : "", sizeof(console));
++	strlcpy(optargs, env_get("falcon_optargs") ? : "", sizeof(optargs));
++	snprintf(str, sizeof(str),
++		 "console=%s %s root=PARTUUID=%s rw rootfstype=ext4 rootwait",
++		 console, optargs, disk_partition_uuid(&info));
+ 
+ 	ret = fdt_find_and_setprop(fdt, "/chosen", "bootargs", str,
+ 				   strlen(str) + 1, 1);

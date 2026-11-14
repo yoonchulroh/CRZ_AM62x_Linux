@@ -2,27 +2,46 @@
 
 IMAGE_DIR=./image/custom_datafs/boot-images
 MODULES_DIR=./image/custom_datafs/usr/lib/
+BOOT_DIR=./image/custom_datafs/boot
 
 START_TIME=`date +%s`
 
-# audio-event-recognition: cross-compile the aer-* modules and install them,
-# the YAMNet model, /etc/aer/aer.conf and the systemd units into the overlay
-build_aer()
+# falcon mode: pack the kernel Image and DTB staged by "kernel" into the
+# fitImage the R5 SPL loads. U-Boot proper is skipped, so the display overlay
+# it would apply (name_overlays) is merged into the DTB here instead. The DTB
+# carries no bootargs: the R5 SPL generates them with root=PARTUUID of the
+# partition it booted from, so one fitImage works on both SD and eMMC.
+falcon_fitimage()
 {
-	make -C ./audio-event-recognition
+	FIT_DIR=./image_temp/falcon
+
+	for f in $BOOT_DIR/Image $BOOT_DIR/dtb/ti/k3-am625-sk.dtb \
+		 $BOOT_DIR/dtb/ti/k3-am625-sk-bsd101wx1-300.dtbo ; do
+		if [ ! -f $f ] ; then
+			echo "$f not found, run ./build.sh kernel first"
+			exit 1
+		fi
+	done
+
+	mkdir -p $FIT_DIR
+	fdtoverlay -i $BOOT_DIR/dtb/ti/k3-am625-sk.dtb -o $FIT_DIR/falcon.dtb \
+		$BOOT_DIR/dtb/ti/k3-am625-sk-bsd101wx1-300.dtbo
 	if [ $? != 0 ] ; then
 		exit 1
 	fi
-	make -C ./audio-event-recognition install DESTDIR=`pwd`/image/custom_datafs
+	cp $BOOT_DIR/Image $FIT_DIR
+	cp ./image/falcon/fitImage.its $FIT_DIR
+	(cd $FIT_DIR && ../../board-support/u-boot-build/a53/tools/mkimage -f fitImage.its fitImage)
 	if [ $? != 0 ] ; then
 		exit 1
 	fi
+	cp $FIT_DIR/fitImage $BOOT_DIR
 }
 
 case "$1" in
 clean)
-	make linux_clean u-boot_clean
-	make -C ./audio-event-recognition clean
+	make linux_clean u-boot_clean tfa-falcon_clean
+	rm -f $BOOT_DIR/tifalcon.bin $BOOT_DIR/fitImage
 	;;
 uboot)
 	mkdir -p $IMAGE_DIR
@@ -38,6 +57,33 @@ uboot)
 	cp ./image_temp/tiboot3.bin $IMAGE_DIR
 	cp ./image_temp/tispl.bin $IMAGE_DIR
 	cp ./image_temp/u-boot.img $IMAGE_DIR
+	# normal boot never reads these; drop leftovers from a falcon build
+	rm -f $BOOT_DIR/tifalcon.bin $BOOT_DIR/fitImage
+	cd ./image
+	./custom_datafs_make.sh
+	cd ..
+	rm -fr ./image_temp
+	;;
+falcon)
+	# Alternative to "uboot": the R5 SPL boots Linux directly. tiboot3.bin
+	# goes to the FAT partition as usual (tispl.bin/u-boot.img are copied
+	# too but never loaded); tifalcon.bin and fitImage go into /boot of the
+	# rootfs, where the falcon R5 SPL looks for them.
+	mkdir -p $IMAGE_DIR
+	mkdir image_temp
+	make u-boot-falcon
+    if [ $? != 0 ] ; then
+	    exit 1
+    fi
+	make u-boot-falcon_install
+    if [ $? != 0 ] ; then
+	    exit 1
+    fi
+	cp ./image_temp/tiboot3.bin $IMAGE_DIR
+	cp ./image_temp/tispl.bin $IMAGE_DIR
+	cp ./image_temp/u-boot.img $IMAGE_DIR
+	cp ./image_temp/tifalcon.bin $BOOT_DIR
+	falcon_fitimage
 	cd ./image
 	./custom_datafs_make.sh
 	cd ..
@@ -60,6 +106,10 @@ kernel)
 	cp ./image_temp/boot/Image ./image/custom_datafs/boot
 	cp ./image_temp/boot/dtb/ti/k3-am625-sk.dtb ./image/custom_datafs/boot/dtb/ti
 	cp ./image_temp/boot/dtb/ti/k3-am625-sk-bsd101wx1-300.dtbo ./image/custom_datafs/boot/dtb/ti
+	# last U-Boot build was "falcon": repack the fitImage with the new kernel
+	if [ -f $BOOT_DIR/fitImage ] ; then
+		falcon_fitimage
+	fi
 	cd image
 	./custom_datafs_make.sh
 	cd ..
@@ -68,25 +118,6 @@ kernel)
 rootfs)
 	cd ubuntu-26.04
 	./create_ubuntu26.04.sh
-	cd ..
-	;;
-aer)
-	build_aer
-	cd image
-	./custom_datafs_make.sh
-	cd ..
-	;;
-sample)
-	make -C ./sample/touch-demo
-    if [ $? != 0 ] ; then
-	    exit 1
-    fi
-	mkdir -p ./image/custom_datafs/usr/local/bin
-	mkdir -p ./image/custom_datafs/etc/xdg/weston
-	cp ./sample/touch-demo/touch-demo ./image/custom_datafs/usr/local/bin
-	cp ./sample/touch-demo/weston.ini ./image/custom_datafs/etc/xdg/weston
-	cd image
-	./custom_datafs_make.sh
 	cd ..
 	;;
 all|*)
@@ -103,6 +134,7 @@ all|*)
 	cp ./image_temp/tiboot3.bin $IMAGE_DIR
 	cp ./image_temp/tispl.bin $IMAGE_DIR
 	cp ./image_temp/u-boot.img $IMAGE_DIR
+	rm -f $BOOT_DIR/tifalcon.bin $BOOT_DIR/fitImage
 
 	mkdir -p $MODULES_DIR
 	make linux
@@ -119,7 +151,6 @@ all|*)
 	cp ./image_temp/boot/Image ./image/custom_datafs/boot
 	cp ./image_temp/boot/dtb/ti/k3-am625-sk.dtb ./image/custom_datafs/boot/dtb/ti
 	cp ./image_temp/boot/dtb/ti/k3-am625-sk-bsd101wx1-300.dtbo ./image/custom_datafs/boot/dtb/ti
-	build_aer
 	cd image
 	./custom_datafs_make.sh
 	cd ..

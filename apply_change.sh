@@ -49,7 +49,27 @@ SDK=$(cd "$SDK" && pwd)
 # Sanity-check the target
 ###############################################################################
 
-[ -f "$SDK/Rules.make" ] || die "$SDK does not look like a TI SDK (no Rules.make)"
+# Basic checks against an obvious wrong path (this kit, a parent directory, a
+# subdirectory of the SDK, some other project). Not a full verification.
+case "$SDK/" in
+"$HERE"/*) die "$SDK is this kit's directory (or inside it), not the TI SDK" ;;
+esac
+case "$HERE/" in
+"$SDK"/*) die "$SDK contains this kit; give the TI SDK directory itself" ;;
+esac
+
+for f in Rules.make Makefile setup.sh; do
+	[ -f "$SDK/$f" ] || die "$SDK does not look like a TI SDK (no $f)"
+done
+for d in makerules board-support board-support/prebuilt-images; do
+	[ -d "$SDK/$d" ] || die "$SDK does not look like a TI SDK (no $d/)"
+done
+grep -q '^export TI_SDK_PATH?=' "$SDK/Rules.make" ||
+	die "$SDK/Rules.make has no 'export TI_SDK_PATH?=' line; not a TI SDK Rules.make"
+grep -Eq '^PLATFORM\??=am62xx-evm' "$SDK/Rules.make" ||
+	die "$SDK/Rules.make is not for am62xx-evm; this kit is for the AM62x SDK"
+[ -w "$SDK" ] && [ -w "$SDK/Rules.make" ] ||
+	die "no write permission on $SDK (run as the user that owns the SDK)"
 
 # Refuse to double-apply: the renamed u-boot dir only exists after conversion.
 if [ -d "$SDK/board-support/ti-u-boot" ] &&

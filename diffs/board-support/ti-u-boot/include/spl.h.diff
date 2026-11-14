@@ -1,0 +1,23 @@
+--- a/board-support/ti-u-boot/include/spl.h
++++ b/board-support/ti-u-boot/include/spl.h
+@@ -606,6 +606,20 @@
+  */
+ int spl_mmc_boot_partition(const u32 boot_device);
+ 
++/**
++ * spl_mmc_fs_boot_partition() - MMC partition to load images from in FS mode.
++ * @boot_device:	ID of the device which the MMC driver wants to load
++ *			the image from.
++ *
++ * This function should return the partition number of the filesystem the
++ * SPL loads from (on the given boot_device) when CONFIG_SYS_MMCSD_FS_BOOT
++ * is set.
++ *
++ * If not overridden, it is weakly defined in common/spl/spl_mmc.c and
++ * returns CONFIG_SYS_MMCSD_FS_BOOT_PARTITION.
++ */
++int spl_mmc_fs_boot_partition(const u32 boot_device);
++
+ struct mmc;
+ /**
+  * default_spl_mmc_emmc_boot_partition() - eMMC boot partition to load U-Boot from.

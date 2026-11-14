@@ -60,10 +60,7 @@ apt-get install alsa-tools alsa-utils devmem2 usbutils fbset libdrm-tests -y
 
 apt-get install weston glmark2-es2-drm glmark2-es2-wayland mesa-utils freeglut3-dev libglu1-mesa-dev mesa-common-dev -y
 
-# Runtime libraries of audio-event-recognition (installed by "./build.sh aer"
-# into the custom_datafs overlay): TensorFlow Lite for aer-infer, ALSA for
-# aer-capture, wayland/cairo/fonts for aer-display.
-apt-get install libtensorflow-lite2.14.1 libasound2t64 libwayland-client0 libcairo2 fonts-dejavu-core -y
+apt-get install fdisk -y
 
 cat > /etc/systemd/system/weston.service <<'EOF'
 [Unit]

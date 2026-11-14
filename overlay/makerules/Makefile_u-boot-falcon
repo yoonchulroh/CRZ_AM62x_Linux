@@ -1,0 +1,43 @@
+# Falcon mode U-Boot build
+# The R5 SPL loads tifalcon.bin (TFA + OP-TEE + DM, no A53 SPL) and the kernel
+# fitImage from the rootfs partition and jumps straight into Linux, skipping the
+# A53 SPL and U-Boot proper.
+#
+# TFA is rebuilt from source because falcon mode needs BL31 to jump to the
+# kernel at 0x82000000 with the DTB at 0x88000000 (instead of the A53 SPL at
+# 0x80080000). The normal "u-boot" target keeps using the prebuilt bl31.bin.
+#
+# Builds into the same u-boot-build/{r5,a53} objtrees as "u-boot"; the
+# defconfig step re-runs on every build, so switching between the two is safe.
+#
+# Usage:
+#   make u-boot-falcon
+#   make u-boot-falcon_install
+
+TFA_SRC_DIR=$(TI_SDK_PATH)/board-support/trusted-firmware
+TFA_FALCON_BUILD=$(TI_SDK_PATH)/board-support/tfa-build/falcon
+TFA_FALCON_BL31=$(TFA_FALCON_BUILD)/k3/lite/release/bl31.bin
+
+tfa-falcon:
+	@echo ===================================
+	@echo    Building TFA for falcon mode
+	@echo ===================================
+	mkdir -p $(TFA_FALCON_BUILD)
+	$(MAKE) -j $(MAKE_JOBS) -C $(TFA_SRC_DIR) CROSS_COMPILE=$(CROSS_COMPILE) ARCH=aarch64 \
+		PLAT=k3 TARGET_BOARD=lite SPD=opteed \
+		PRELOADED_BL33_BASE=0x82000000 K3_HW_CONFIG_BASE=0x88000000 \
+		BUILD_BASE=$(TFA_FALCON_BUILD) bl31
+
+tfa-falcon_clean:
+	@echo ===================================
+	@echo    Cleaning TFA for falcon mode
+	@echo ===================================
+	rm -rf $(TFA_FALCON_BUILD)
+
+u-boot-falcon: tfa-falcon
+	$(MAKE) -C $(TI_SDK_PATH) u-boot \
+		UBOOT_MACHINE_R5="$(UBOOT_MACHINE_R5) k3_r5_falcon.config" \
+		UBOOT_ATF=$(TFA_FALCON_BL31)
+
+u-boot-falcon_install: u-boot_install
+	cp $(TI_SDK_PATH)/board-support/u-boot-build/a53/tifalcon.bin $(DESTDIR)

@@ -1,53 +1,32 @@
 --- a/Rules.make
 +++ b/Rules.make
-@@ -9,9 +9,6 @@
- # This will be configured with the setup.sh script.
- EXEC_DIR?=__EXEC_DIR__
+@@ -11,5 +11,2 @@
  
 -#root of the target file system for installing applications
 -DESTDIR?=__DESTDIR__
 -
  # Root of the boot partition to install boot binaries
- BOOTFS?=__BOOTFS__
+@@ -23,2 +20,5 @@
  
-@@ -19,7 +16,10 @@
- 
- ### TI SDK CONFIG ###
- #Points to the root of the TI SDK
--export TI_SDK_PATH?=/home/yoonchulroh/ti-processor-sdk-linux-am62xx-evm-12.01.00.05.03
-+export TI_SDK_PATH?=/home/yoonchulroh/CRZ/am62x_20260918
-+
 +#root of the target file system for installing applications
 +DESTDIR?=${TI_SDK_PATH}/image_temp
- 
++
  export LINUX_DEVKIT_PATH=$(TI_SDK_PATH)/linux-devkit
- export K3_R5_LINUX_DEVKIT_PATH=$(TI_SDK_PATH)/k3r5-devkit
-@@ -27,12 +27,10 @@
- SDK_PATH_HOST=$(LINUX_DEVKIT_PATH)/sysroots/x86_64-arago-linux
- 
+@@ -29,3 +29,2 @@
  # The source directories for each component
 -ARM_BENCHMARKS_SRC_DIR:=$(shell ls -d $(TI_SDK_PATH)/example-applications/*arm-benchmarks*)
  CRYPTODEV_SRC_DIR:=$(shell ls -d $(TI_SDK_PATH)/board-support/extra-drivers/cryptodev*)
- IMG_ROGUE_SRC_DIR:=$(shell ls -d $(TI_SDK_PATH)/board-support/extra-drivers/ti-img-rogue-driver*)
- UBOOT_SRC_DIR:=$(shell ls -d $(TI_SDK_PATH)/board-support/ti-u-boot*)
+@@ -34,3 +33,2 @@
  LINUXKERNEL_INSTALL_DIR:=$(shell ls -d $(TI_SDK_PATH)/board-support/ti-linux-kernel*)
 -TFA_SRC_DIR:=$(shell ls -d $(TI_SDK_PATH)/board-support/trusted-firmware-a*)
  
- export TI_SECURE_DEV_PKG=$(TI_SDK_PATH)/board-support/core-secdev-k3
- ### PLATFORM CONFIG ###
-@@ -50,6 +48,9 @@
- export CROSS_COMPILE=$(LINUX_DEVKIT_PATH)/sysroots/x86_64-arago-linux/usr/bin/aarch64-oe-linux/aarch64-oe-linux-
- export CROSS_COMPILE_ARMV7=$(K3_R5_LINUX_DEVKIT_PATH)/sysroots/x86_64-arago-linux/usr/bin/arm-oe-eabi/arm-oe-eabi-
+@@ -52,2 +50,5 @@
  
 +# Host tools built by u-boot (mkimage is used to build the kernel fitImage)
 +export PATH:=$(TI_SDK_PATH)/board-support/u-boot-build/a53/tools:$(PATH)
 +
  #Default CC value to be used when cross compiling.  This is so that the
- #GNU Make default of "cc" is not used to point to the host compiler
- export CC=$(CROSS_COMPILE)gcc --sysroot=$(SDK_PATH_TARGET)
-@@ -81,6 +82,6 @@
- WINDOW_SYSTEM=lws-generic
- PVR_BUILD=release
+@@ -83,4 +84,4 @@
  
 -MAKE_ALL_TARGETS?= arm-benchmarks cryptodev u-boot u-boot-snagboot linux linux-dtbs ti-img-rogue-driver jailhouse linux-extras linux-extras-dtbs u-boot-extras
 +MAKE_ALL_TARGETS?= u-boot linux linux-dtbs

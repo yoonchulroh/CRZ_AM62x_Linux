@@ -10,7 +10,15 @@
  dtb-$(CONFIG_ARCH_K3) += k3-am625-verdin-nonwifi-ivy.dtb
 --- a/board-support/ti-linux-kernel-6.18.38+git-ti/arch/arm64/boot/dts/ti/k3-am625-sk-common.dtsi
 +++ b/board-support/ti-linux-kernel-6.18.38+git-ti/arch/arm64/boot/dts/ti/k3-am625-sk-common.dtsi
-@@ -17,6 +17,7 @@
+@@ -6,6 +6,7 @@
+  */
+ 
+ #include "k3-am62x-sk-common.dtsi"
++#include <dt-bindings/input/input.h>
+ 
+ / {
+ 	opp-table {
+@@ -17,6 +18,7 @@
  		};
  	};
  
@@ -18,11 +26,30 @@
  	vmain_pd: regulator-0 {
  		/* TPS65988 PD CONTROLLER OUTPUT */
  		compatible = "regulator-fixed";
-@@ -91,8 +92,20 @@
+@@ -91,8 +93,39 @@
  		regulator-always-on;
  		regulator-boot-on;
  	};
 +#endif
++
++	leds {
++		led-0 {
++			gpios = <&main_gpio0 13 GPIO_ACTIVE_HIGH>;
++		};
++	};
++
++	gpio-keys {
++		compatible = "gpio-keys";
++		autorepeat;
++		pinctrl-names = "default";
++		pinctrl-0 = <&push_button_pins_default>;
++
++		sw1 {
++			label = "GPIO Key USER1";
++			linux,code = <BTN_0>;
++			gpios = <&main_gpio1 49 GPIO_ACTIVE_LOW>;
++		};
++	};
 +
 +	lcd_bl: backlight {
 +		compatible = "pwm-backlight";
@@ -39,16 +66,10 @@
  &main_pmx0 {
  	main_mmc0_pins_default: main-mmc0-default-pins {
  		bootph-all;
-@@ -141,6 +154,34 @@
+@@ -141,6 +174,19 @@
  		>;
  		bootph-all;
  	};
-+
-+	main_usb0_pins_default: main-usb0-pins-default {
-+	    pinctrl-single,pins = <
-+            AM62X_IOPAD(0x254, PIN_OUTPUT, 0) /* (C20) USB0_DRVVBUS */
-+	    >;
-+    };
 +
 +	main_epwm0_pins_default: main-epwm0-pins-default {
 +		pinctrl-single,pins = <
@@ -57,15 +78,6 @@
 +	};
 +};
 +
-+/* Replaces the stock SK LED mux (GPIO1_49); GPIO0_36 is the panel enable */
-+&usr_led_pins_default {
-+	pinctrl-single,pins = <
-+		AM62X_IOPAD(0x034, PIN_OUTPUT, 7) /* (H21) OSPI0_CSn2.GPIO0_13 */
-+		AM62X_IOPAD(0x000, PIN_OUTPUT, 7) /* (H24) OSPI0_CLK.GPIO0_0 */
-+		AM62X_IOPAD(0x038, PIN_OUTPUT, 7) /* (E24) OSPI0_CSn3.GPIO0_14 */
-+		AM62X_IOPAD(0x094, PIN_OUTPUT, 7) /* (N20) GPMC0_BE1n.GPIO0_36 */
-+	>;
-+};
 +
 +&epwm0 {
 +	pinctrl-names = "default";
@@ -74,7 +86,7 @@
  };
  
  &main_gpio0 {
-@@ -151,7 +192,28 @@
+@@ -151,7 +197,28 @@
  	bootph-all;
  };
  
@@ -103,7 +115,7 @@
  	exp1: gpio@22 {
  		compatible = "ti,tca6424";
  		reg = <0x22>;
-@@ -177,6 +239,7 @@
+@@ -177,6 +244,7 @@
  				   "TSINT#", "IO_EXP_TEST_LED";
  		bootph-all;
  	};
@@ -111,7 +123,7 @@
  };
  
  &sdhci0 {
-@@ -189,8 +252,8 @@
+@@ -189,8 +257,8 @@
  };
  
  &sdhci1 {
@@ -137,7 +149,45 @@
  	};
 --- a/board-support/ti-linux-kernel-6.18.38+git-ti/arch/arm64/boot/dts/ti/k3-am62x-sk-common.dtsi
 +++ b/board-support/ti-linux-kernel-6.18.38+git-ti/arch/arm64/boot/dts/ti/k3-am62x-sk-common.dtsi
-@@ -576,6 +576,7 @@
+@@ -221,9 +221,18 @@
+ 		>;
+ 	};
+ 
+-	usr_led_pins_default: usr-led-default-pins {
++	usr_led_pins_default: usr-led-pins-default {
+ 		pinctrl-single,pins = <
+-			AM62X_IOPAD(0x244, PIN_OUTPUT, 7) /* (C17/B15) MMC1_SDWP.GPIO1_49 */
++			AM62X_IOPAD(0x034, PIN_OUTPUT, 7) /* (H21) OSPI0_CSn2.GPIO0_13 */
++			AM62X_IOPAD(0x000, PIN_OUTPUT, 7) /* (H24) OSPI0_CLK.GPIO0_0 */
++			AM62X_IOPAD(0x038, PIN_OUTPUT, 7) /* (E24) OSPI0_CSn3.GPIO0_14 */
++			AM62X_IOPAD(0x094, PIN_OUTPUT, 7) /* (N20) GPMC0_BE1n.GPIO0_36 */
++		>;
++	};
++
++	push_button_pins_default: push-button-pins-default {
++		pinctrl-single,pins = <
++			AM62X_IOPAD(0x244, PIN_INPUT, 7) /* (C17) MMC1_SDWP.GPIO1_49 */
+ 		>;
+ 	};
+ 
+@@ -252,9 +261,15 @@
+ 		>;
+ 	};
+ 
++	main_usb0_pins_default: main-usb0-pins-default {
++	    pinctrl-single,pins = <
++            AM62X_IOPAD(0x254, PIN_INPUT, 7) /* (C20) USB0_DRVVBUS.GPIO1_50 */
++	    >;
++    };
++
+ 	main_usb1_pins_default: main-usb1-default-pins {
+ 		pinctrl-single,pins = <
+-			AM62X_IOPAD(0x0258, PIN_OUTPUT, 0) /* (F18/E16) USB1_DRVVBUS */
++			AM62X_IOPAD(0x0258, PIN_INPUT, 7) /* (F18/E16) USB1_DRVVBUS.GPIO1_51 */
+ 		>;
+ 	};
+ 
+@@ -576,6 +591,7 @@
  	pinctrl-0 = <&main_dss0_pins_default>;
  };
  
@@ -145,7 +195,7 @@
  &dss_ports {
  	/* VP2: DPI Output */
  	port@1 {
-@@ -586,6 +587,11 @@
+@@ -586,6 +602,11 @@
  		};
  	};
  };
@@ -157,7 +207,7 @@
  
  /* mcu_gpio0 and mcu_gpio_intr are reserved for mcu firmware usage */
  &mcu_gpio0 {
-@@ -604,11 +610,12 @@
+@@ -604,11 +625,12 @@
  	bootph-all;
  };
  

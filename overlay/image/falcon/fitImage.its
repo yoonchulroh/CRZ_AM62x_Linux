@@ -1,0 +1,48 @@
+/dts-v1/;
+
+/*
+ * Falcon mode kernel fitImage, loaded by the R5 SPL from /boot/fitImage on the
+ * rootfs partition (SD or eMMC). build.sh "falcon" stages Image and falcon.dtb
+ * (k3-am625-sk with the display overlay merged) next to this file and runs
+ * mkimage on it. The R5 SPL adds /chosen/bootargs at boot. The load addresses must match the falcon TFA build
+ * (PRELOADED_BL33_BASE / K3_HW_CONFIG_BASE in makerules/Makefile_u-boot-falcon).
+ *
+ * Not signed: on GP devices the R5 SPL skips authentication.
+ */
+
+/ {
+	description = "Kernel fitImage";
+	#address-cells = <1>;
+
+	images {
+		kernel {
+			description = "Linux kernel";
+			data = /incbin/("Image");
+			type = "kernel";
+			arch = "arm64";
+			os = "linux";
+			compression = "none";
+			load = <0x82000000>;
+			entry = <0x82000000>;
+		};
+
+		fdt {
+			description = "Flattened Device Tree blob";
+			data = /incbin/("falcon.dtb");
+			type = "flat_dt";
+			arch = "arm64";
+			compression = "none";
+			load = <0x88000000>;
+			entry = <0x88000000>;
+		};
+	};
+
+	configurations {
+		default = "conf-falcon";
+		conf-falcon {
+			description = "Linux kernel, FDT blob";
+			kernel = "kernel";
+			fdt = "fdt";
+		};
+	};
+};

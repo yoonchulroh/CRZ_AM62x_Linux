@@ -1,0 +1,24 @@
+--- a/board-support/ti-u-boot/common/spl/spl_mmc.c
++++ b/board-support/ti-u-boot/common/spl/spl_mmc.c
+@@ -193,6 +193,11 @@
+ #endif
+ 
+ #ifdef CONFIG_SYS_MMCSD_FS_BOOT
++int __weak spl_mmc_fs_boot_partition(const u32 boot_device)
++{
++	return CONFIG_SYS_MMCSD_FS_BOOT_PARTITION;
++}
++
+ static int spl_mmc_fs_load_os(struct spl_image_info *spl_image,
+ 			      struct spl_boot_device *bootdev,
+ 			      struct blk_desc *blk_dev, int part)
+@@ -240,7 +245,8 @@
+ {
+ 	int ret = -ENOSYS;
+ 
+-	__maybe_unused int partition = CONFIG_SYS_MMCSD_FS_BOOT_PARTITION;
++	__maybe_unused int partition =
++		spl_mmc_fs_boot_partition(bootdev->boot_device);
+ 
+ #if CONFIG_SYS_MMCSD_FS_BOOT_PARTITION == -1
+ 	{

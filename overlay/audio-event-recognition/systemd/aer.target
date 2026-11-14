@@ -1,6 +1,0 @@
-[Unit]
-Description=Audio event recognition pipeline
-Documentation=file:/usr/local/share/aer/README.md
-
-[Install]
-WantedBy=multi-user.target

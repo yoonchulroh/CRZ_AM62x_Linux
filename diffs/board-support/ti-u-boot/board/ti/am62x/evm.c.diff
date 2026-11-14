@@ -1,0 +1,76 @@
+--- a/board-support/ti-u-boot/board/ti/am62x/evm.c
++++ b/board-support/ti-u-boot/board/ti/am62x/evm.c
+@@ -133,11 +133,63 @@
+ 	}
+ 
+ 	ti_set_fdt_env(NULL, NULL);
++
++	/* Booted from eMMC: load kernel/rootfs from eMMC user area (mmcblk0p1) */
++	u32 devstat = readl(CTRLMMR_MAIN_DEVSTAT);
++	u32 bootmode = (devstat & MAIN_DEVSTAT_PRIMARY_BOOTMODE_MASK) >>
++			MAIN_DEVSTAT_PRIMARY_BOOTMODE_SHIFT;
++
++	if (bootmode == BOOT_DEVICE_EMMC) {
++		env_set("mmcdev", "0");
++		env_set("bootpart", "0:1");
++	}
++
+ 	return 0;
+ }
+ #endif
+ 
+ #if defined(CONFIG_XPL_BUILD)
++#if IS_ENABLED(CONFIG_SPL_OS_BOOT_SECURE) && !IS_ENABLED(CONFIG_ARM64)
++/*
++ * Falcon mode: the R5 SPL loads tifalcon.bin/fitImage from the device and
++ * partition named by mmcdev/bootpart, and derives root=PARTUUID from them.
++ * The default env points at the SD card (1:2); when booted from eMMC, switch
++ * to the eMMC user area (mmcblk0p1), as board_late_init() does for U-Boot.
++ * Runs before the boot device is chosen; the env is otherwise only set up
++ * in jump_to_image(), after the falcon payload has been loaded.
++ *
++ * With the env "nowhere", env_relocate() in SPL never imports the default
++ * env into the hashtable, so env_set() is refused and env_get() hands out
++ * one shared 32-byte buffer (truncating falcon_optargs). Import the default
++ * env directly, on every boot device.
++ */
++static void falcon_set_boot_env(void)
++{
++	u32 devstat = readl(CTRLMMR_MAIN_DEVSTAT);
++	u32 bootmode = (devstat & MAIN_DEVSTAT_PRIMARY_BOOTMODE_MASK) >>
++			MAIN_DEVSTAT_PRIMARY_BOOTMODE_SHIFT;
++
++	env_set_default(NULL, 0);
++
++	if (bootmode != BOOT_DEVICE_EMMC)
++		return;
++
++	env_set("mmcdev", "0");
++	env_set("bootpart", "0:1");
++}
++
++int spl_mmc_fs_boot_partition(const u32 boot_device)
++{
++	char *bootpart = env_get("bootpart");
++	char *part = bootpart ? strchr(bootpart, ':') : NULL;
++
++	if (!part)
++		return CONFIG_SYS_MMCSD_FS_BOOT_PARTITION;
++
++	return simple_strtoul(part + 1, NULL, 10);
++}
++#endif
++
+ void spl_board_init(void)
+ {
+ 	if (IS_ENABLED(CONFIG_TI_K3_BOARD_LFOSC))
+@@ -147,6 +199,9 @@
+ 	if (IS_ENABLED(CONFIG_SPL_SPLASH_SCREEN) && IS_ENABLED(CONFIG_SPL_BMP))
+ 		splash_display();
+ 
++#if IS_ENABLED(CONFIG_SPL_OS_BOOT_SECURE) && !IS_ENABLED(CONFIG_ARM64)
++	falcon_set_boot_env();
++#endif
+ }
+ 
+ void spl_perform_board_fixups(struct spl_image_info *spl_image)

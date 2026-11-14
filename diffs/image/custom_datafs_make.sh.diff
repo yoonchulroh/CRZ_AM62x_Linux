@@ -1,6 +1,19 @@
 --- a/image/custom_datafs_make.sh
 +++ b/image/custom_datafs_make.sh
-@@ -10,7 +10,9 @@
+@@ -3,14 +3,22 @@
+ ROOTFS_NAME=custom_datafs.tar
+ ROOTFS_DIR=custom_datafs
+ RTL_DIR=usr/lib/firmware/rtlwifi
++PVR_DIR=usr/lib/firmware/powervr
+ 
+ mkdir -p $ROOTFS_DIR/$RTL_DIR
+ cp -a rtl8188eufw.bin $ROOTFS_DIR/$RTL_DIR
+ 
++# PowerVR GPU firmware for the upstream powervr driver, with the license it
++# must ship with. Kept in ./powervr because build.sh empties custom_datafs/usr/lib.
++mkdir -p $ROOTFS_DIR/$PVR_DIR
++cp -a powervr/rogue_33.15.11.3_v1.fw powervr/LICENSE.powervr $ROOTFS_DIR/$PVR_DIR
++
  rm -rf $ROOTFS_NAME.gz
  
  cd $ROOTFS_DIR

@@ -1,0 +1,11 @@
+--- a/image/custom_datafs/root/S99_Fusing_eMMC_FS.sh
++++ b/image/custom_datafs/root/S99_Fusing_eMMC_FS.sh
+@@ -10,7 +10,7 @@
+ echo 0 > /sys/block/mmcblk0boot0/force_ro
+ dd if=$ROOT_DIR/boot-images/tiboot3.bin of=/dev/mmcblk0boot0 seek=0
+ dd if=$ROOT_DIR/boot-images/tispl.bin of=/dev/mmcblk0boot0 seek=1024
+-dd if=$ROOT_DIR/boot-images/u-boot.img of=/dev/mmcblk0boot0 seek=5120
++dd if=$ROOT_DIR/boot-images/u-boot.img of=/dev/mmcblk0boot0 seek=4096
+ 
+ mmc bootpart enable 1 1 /dev/mmcblk0boot0
+ sleep 1
