@@ -89,6 +89,68 @@ WantedBy=graphical.target
 EOF
 systemctl enable weston.service
 
+# GPU display mode, off by default: labwc compositing on the PowerVR GPU
+# (wlroots GLES2 renderer -> Mesa Zink -> Mesa PowerVR Vulkan driver) in place
+# of Weston, which composites on the CPU. Select with "sudo display-mode gpu"
+# and go back with "sudo display-mode weston".
+apt-get install labwc mesa-vulkan-drivers -y
+
+cat > /etc/systemd/system/labwc.service <<'EOF'
+[Unit]
+Description=labwc Wayland compositor rendering on the PowerVR GPU (GPU display mode)
+Requires=systemd-user-sessions.service
+After=systemd-user-sessions.service
+Conflicts=getty@tty1.service weston.service
+After=getty@tty1.service
+
+[Service]
+User=mango
+PAMName=login
+TTYPath=/dev/tty1
+TTYReset=yes
+TTYVHangup=yes
+TTYVTDisallocate=yes
+UtmpIdentifier=tty1
+UtmpMode=user
+StandardOutput=journal
+StandardError=journal
+# wlroots GLES2 renderer -> Mesa Zink -> Mesa PowerVR Vulkan driver (render
+# node of the GPU); the frame buffers are allocated on tidss (the display).
+# Apps started by labwc inherit these, so their GLES and Vulkan also run on
+# the GPU (GLES 2.0 only; unset MESA_LOADER_DRIVER_OVERRIDE for an app that
+# needs more, it then renders on the CPU as in Weston mode).
+Environment=WLR_RENDERER=gles2
+Environment=WLR_RENDER_DRM_DEVICE=/dev/dri/by-path/platform-fd00000.gpu-render
+Environment=MESA_LOADER_DRIVER_OVERRIDE=zink
+Environment=PVR_I_WANT_A_BROKEN_VULKAN_DRIVER=1
+# powervr is a module and can show up after graphical.target
+ExecStartPre=/bin/sh -c 'until [ -e $WLR_RENDER_DRM_DEVICE ]; do sleep 0.2; done'
+ExecStart=/usr/bin/labwc -V
+Restart=on-failure
+
+[Install]
+WantedBy=graphical.target
+EOF
+
+cat > /usr/local/bin/display-mode <<'EOF'
+#!/bin/sh
+# Select what drives the LCD, now and on the next boots:
+#   weston - Weston, composited on the CPU (default)
+#   gpu    - labwc, composited on the PowerVR GPU
+case "$1" in
+weston)	on=weston off=labwc ;;
+gpu)	on=labwc off=weston ;;
+*)
+	systemctl -q is-enabled labwc.service && echo gpu || echo weston
+	echo "usage: sudo $0 weston|gpu"
+	exit 1
+	;;
+esac
+systemctl disable --now $off.service
+systemctl enable --now $on.service
+EOF
+chmod 755 /usr/local/bin/display-mode
+
 curl -fsSL https://deb.nodesource.com/setup_current.x | sudo -E bash - &&sudo apt-get install -y nodejs
 
 mkdir -p /etc/netplan

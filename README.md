@@ -110,3 +110,26 @@ To build a PREEMPT_RT kernel, run `rt_change.sh` instead of (or after) step 2.
 This adds TI's RT config fragment to `Rules.make` and renames the `kernel` build target to `kernel-rt` (`./build.sh kernel` then fails with a message).
 
 Build the kernel with `./build.sh kernel-rt`; `./build.sh all` builds the RT kernel too. On the board, `uname -r` shows `6.18.38-rt`.
+
+## 9. Optional: GPU display mode
+
+The image boots in Weston mode: Weston draws the display on the CPU. In GPU mode, labwc draws it on the PowerVR GPU instead. Both are in the root filesystem built in step 3; switch on the board:
+
+```
+sudo display-mode gpu
+```
+
+The switch takes effect immediately and is kept across reboots. `sudo display-mode weston` switches back, and `display-mode` without an argument prints the current mode.
+
+To check that the GPU is in use, look for PowerVR in labwc's renderer line:
+
+```
+journalctl -b -t labwc | grep "GL renderer"
+```
+
+In GPU mode:
+
+- labwc starts with an empty desktop. Put the commands that start your apps in `~/.config/labwc/autostart`.
+- Apps started by labwc render on the GPU too: GLES through Mesa's Zink driver (GLES 2.0 only) and Vulkan directly. An app that needs more than GLES 2.0 has to be started with `MESA_LOADER_DRIVER_OVERRIDE` unset; it then renders on the CPU, as in Weston mode.
+- Weston's own protocols (its on-screen keyboard and text input, `weston-screenshooter`) and `weston.ini` are not available.
+- Mesa marks its PowerVR Vulkan driver, which this mode relies on, as not conformant.
