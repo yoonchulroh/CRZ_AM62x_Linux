@@ -137,15 +137,33 @@ cat > /usr/local/bin/display-mode <<'EOF'
 # Select what drives the LCD, now and on the next boots:
 #   weston - Weston, composited on the CPU (default)
 #   gpu    - labwc, composited on the PowerVR GPU
+#
+# GPU mode also sets the two Mesa variables that put GLES and Vulkan programs
+# on the GPU for the whole system, not only for programs started by labwc:
+# for login shells (from the next login) and for systemd services (from their
+# next start). Weston mode removes them again.
+VARS="MESA_LOADER_DRIVER_OVERRIDE=zink PVR_I_WANT_A_BROKEN_VULKAN_DRIVER=1"
+PROFILE=/etc/profile.d/gpu-mode.sh
+SYSTEMD=/etc/systemd/system.conf.d/gpu-mode.conf
 case "$1" in
-weston)	on=weston off=labwc ;;
-gpu)	on=labwc off=weston ;;
+weston)
+	on=weston off=labwc
+	rm -f $PROFILE $SYSTEMD
+	;;
+gpu)
+	on=labwc off=weston
+	for v in $VARS; do echo "export $v"; done > $PROFILE
+	mkdir -p ${SYSTEMD%/*}
+	printf '[Manager]\nDefaultEnvironment=%s\n' "$VARS" > $SYSTEMD
+	;;
 *)
 	systemctl -q is-enabled labwc.service && echo gpu || echo weston
 	echo "usage: sudo $0 weston|gpu"
 	exit 1
 	;;
 esac
+# systemd re-reads its default environment here, before the compositor starts
+systemctl daemon-reload
 systemctl disable --now $off.service
 systemctl enable --now $on.service
 EOF

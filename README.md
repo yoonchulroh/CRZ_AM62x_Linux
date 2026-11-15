@@ -121,6 +121,17 @@ sudo display-mode gpu
 
 The switch takes effect immediately and is kept across reboots. `sudo display-mode weston` switches back, and `display-mode` without an argument prints the current mode.
 
+What renders where:
+
+| | Weston mode | GPU mode |
+|---|---|---|
+| Compositor (draws the display from all windows) | CPU | GPU |
+| cairo app | CPU | CPU |
+| GLES 2 app | CPU | GPU |
+| Vulkan app | CPU | GPU |
+
+In Weston mode a Vulkan app can still render on the GPU if it is started with `PVR_I_WANT_A_BROKEN_VULKAN_DRIVER=1`; a GLES app cannot.
+
 To check that the GPU is in use, look for PowerVR in labwc's renderer line:
 
 ```
@@ -130,6 +141,7 @@ journalctl -b -t labwc | grep "GL renderer"
 In GPU mode:
 
 - labwc starts with an empty desktop. Put the commands that start your apps in `~/.config/labwc/autostart`.
-- Apps started by labwc render on the GPU too: GLES through Mesa's Zink driver (GLES 2.0 only) and Vulkan directly. An app that needs more than GLES 2.0 has to be started with `MESA_LOADER_DRIVER_OVERRIDE` unset; it then renders on the CPU, as in Weston mode.
+- Apps render on the GPU too: GLES through Mesa's Zink driver (GLES 2.0 only) and Vulkan directly. An app that needs more than GLES 2.0 has to be started with `MESA_LOADER_DRIVER_OVERRIDE` unset; it then renders on the CPU, as in Weston mode.
+- This holds however an app is started. `display-mode gpu` sets the two variables that select the GPU (`MESA_LOADER_DRIVER_OVERRIDE=zink` and `PVR_I_WANT_A_BROKEN_VULKAN_DRIVER=1`) for apps started by labwc, for login shells from the next login (`/etc/profile.d/gpu-mode.sh`) and for systemd services from their next start (`/etc/systemd/system.conf.d/gpu-mode.conf`). `display-mode weston` removes them.
 - Weston's own protocols (its on-screen keyboard and text input, `weston-screenshooter`) and `weston.ini` are not available.
 - Mesa marks its PowerVR Vulkan driver, which this mode relies on, as not conformant.
