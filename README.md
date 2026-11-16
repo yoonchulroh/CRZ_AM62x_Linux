@@ -142,6 +142,14 @@ In GPU mode:
 
 - labwc starts with an empty desktop. Put the commands that start your apps in `~/.config/labwc/autostart`.
 - Apps render on the GPU too: GLES through Mesa's Zink driver (GLES 2.0 only) and Vulkan directly. An app that needs more than GLES 2.0 has to be started with `MESA_LOADER_DRIVER_OVERRIDE` unset; it then renders on the CPU, as in Weston mode.
-- This holds however an app is started. `display-mode gpu` sets the two variables that select the GPU (`MESA_LOADER_DRIVER_OVERRIDE=zink` and `PVR_I_WANT_A_BROKEN_VULKAN_DRIVER=1`) for apps started by labwc, for login shells from the next login (`/etc/profile.d/gpu-mode.sh`) and for systemd services from their next start (`/etc/systemd/system.conf.d/gpu-mode.conf`). `display-mode weston` removes them.
+- This holds however an app is started. `display-mode gpu` sets the two variables that select the GPU (`MESA_LOADER_DRIVER_OVERRIDE=zink` and `PVR_I_WANT_A_BROKEN_VULKAN_DRIVER=1`) for apps started by labwc, for every user's logins from their next login (`/etc/environment`) and for systemd services from their next start (`/etc/systemd/system.conf.d/gpu-mode.conf`). `display-mode weston` removes them.
 - Weston's own protocols (its on-screen keyboard and text input, `weston-screenshooter`) and `weston.ini` are not available.
 - Mesa marks its PowerVR Vulkan driver, which this mode relies on, as not conformant.
+
+### Other users
+
+Users other than `mango` can reach the display socket, in either mode, once they are in the `render` group (then log in again):
+
+```
+sudo usermod -aG render <user>
+```

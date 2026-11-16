@@ -62,6 +62,16 @@ apt-get install weston glmark2-es2-drm glmark2-es2-wayland mesa-utils freeglut3-
 
 apt-get install fdisk -y
 
+# Shared display socket /run/wayland/wayland-0, reachable by the render group
+getent group render >/dev/null || groupadd -r render
+usermod -aG render mango
+mkdir -p /etc/tmpfiles.d
+cat > /etc/tmpfiles.d/wayland.conf <<'EOF'
+d /run/wayland 2770 mango render -
+EOF
+echo 'WAYLAND_DISPLAY=/run/wayland/wayland-0' >> /etc/environment
+
+# Compositors: socket in /run/wayland, not nested (unset WAYLAND_DISPLAY)
 cat > /etc/systemd/system/weston.service <<'EOF'
 [Unit]
 Description=Weston Wayland compositor
@@ -81,7 +91,9 @@ UtmpIdentifier=tty1
 UtmpMode=user
 StandardOutput=journal
 StandardError=journal
-ExecStart=/usr/bin/weston --continue-without-input
+SyslogIdentifier=weston
+UMask=0007
+ExecStart=/bin/sh -c 'export XDG_RUNTIME_DIR=/run/wayland; unset WAYLAND_DISPLAY; exec /usr/bin/weston --continue-without-input --socket=wayland-0'
 Restart=on-failure
 
 [Install]
@@ -89,10 +101,7 @@ WantedBy=graphical.target
 EOF
 systemctl enable weston.service
 
-# GPU display mode, off by default: labwc compositing on the PowerVR GPU
-# (wlroots GLES2 renderer -> Mesa Zink -> Mesa PowerVR Vulkan driver) in place
-# of Weston, which composites on the CPU. Select with "sudo display-mode gpu"
-# and go back with "sudo display-mode weston".
+# GPU display mode (off by default): labwc compositing on the PowerVR GPU
 apt-get install labwc mesa-vulkan-drivers -y
 
 cat > /etc/systemd/system/labwc.service <<'EOF'
@@ -114,18 +123,17 @@ UtmpIdentifier=tty1
 UtmpMode=user
 StandardOutput=journal
 StandardError=journal
-# wlroots GLES2 renderer -> Mesa Zink -> Mesa PowerVR Vulkan driver (render
-# node of the GPU); the frame buffers are allocated on tidss (the display).
-# Apps started by labwc inherit these, so their GLES and Vulkan also run on
-# the GPU (GLES 2.0 only; unset MESA_LOADER_DRIVER_OVERRIDE for an app that
-# needs more, it then renders on the CPU as in Weston mode).
+SyslogIdentifier=labwc
+# Render on the GPU: GLES2 -> Zink -> PowerVR Vulkan; inherited by apps
 Environment=WLR_RENDERER=gles2
 Environment=WLR_RENDER_DRM_DEVICE=/dev/dri/by-path/platform-fd00000.gpu-render
 Environment=MESA_LOADER_DRIVER_OVERRIDE=zink
 Environment=PVR_I_WANT_A_BROKEN_VULKAN_DRIVER=1
 # powervr is a module and can show up after graphical.target
 ExecStartPre=/bin/sh -c 'until [ -e $WLR_RENDER_DRM_DEVICE ]; do sleep 0.2; done'
-ExecStart=/usr/bin/labwc -V
+UMask=0007
+# labwc takes wayland-0 in the empty /run/wayland
+ExecStart=/bin/sh -c 'export XDG_RUNTIME_DIR=/run/wayland; unset WAYLAND_DISPLAY; exec /usr/bin/labwc -V'
 Restart=on-failure
 
 [Install]
@@ -134,25 +142,28 @@ EOF
 
 cat > /usr/local/bin/display-mode <<'EOF'
 #!/bin/sh
-# Select what drives the LCD, now and on the next boots:
-#   weston - Weston, composited on the CPU (default)
-#   gpu    - labwc, composited on the PowerVR GPU
-#
-# GPU mode also sets the two Mesa variables that put GLES and Vulkan programs
-# on the GPU for the whole system, not only for programs started by labwc:
-# for login shells (from the next login) and for systemd services (from their
-# next start). Weston mode removes them again.
+# Select what drives the LCD: weston (CPU, default) or gpu (labwc on the GPU).
+# gpu also sets the Mesa GPU variables for all logins and services.
 VARS="MESA_LOADER_DRIVER_OVERRIDE=zink PVR_I_WANT_A_BROKEN_VULKAN_DRIVER=1"
+ENVFILE=/etc/environment
+# set by older images
 PROFILE=/etc/profile.d/gpu-mode.sh
 SYSTEMD=/etc/systemd/system.conf.d/gpu-mode.conf
 case "$1" in
+weston|gpu)
+	rm -f $PROFILE
+	sed -i -e '/^MESA_LOADER_DRIVER_OVERRIDE=/d' \
+		-e '/^PVR_I_WANT_A_BROKEN_VULKAN_DRIVER=/d' $ENVFILE
+	;;
+esac
+case "$1" in
 weston)
 	on=weston off=labwc
-	rm -f $PROFILE $SYSTEMD
+	rm -f $SYSTEMD
 	;;
 gpu)
 	on=labwc off=weston
-	for v in $VARS; do echo "export $v"; done > $PROFILE
+	for v in $VARS; do echo "$v"; done >> $ENVFILE
 	mkdir -p ${SYSTEMD%/*}
 	printf '[Manager]\nDefaultEnvironment=%s\n' "$VARS" > $SYSTEMD
 	;;
@@ -162,7 +173,7 @@ gpu)
 	exit 1
 	;;
 esac
-# systemd re-reads its default environment here, before the compositor starts
+# reload the default environment before starting the compositor
 systemctl daemon-reload
 systemctl disable --now $off.service
 systemctl enable --now $on.service
