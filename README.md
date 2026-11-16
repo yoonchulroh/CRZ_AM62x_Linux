@@ -145,6 +145,7 @@ In GPU mode:
 - This holds however an app is started. `display-mode gpu` sets the two variables that select the GPU (`MESA_LOADER_DRIVER_OVERRIDE=zink` and `PVR_I_WANT_A_BROKEN_VULKAN_DRIVER=1`) for apps started by labwc, for every user's logins from their next login (`/etc/environment`) and for systemd services from their next start (`/etc/systemd/system.conf.d/gpu-mode.conf`). `display-mode weston` removes them.
 - Weston's own protocols (its on-screen keyboard and text input, `weston-screenshooter`) and `weston.ini` are not available.
 - Mesa marks its PowerVR Vulkan driver, which this mode relies on, as not conformant.
+- Mesa is pinned to Ubuntu's 26.0.3 (`/etc/apt/preferences.d/mesa.pref`): the 26.0.8 update shows GPU-rendered windows without an alpha channel in greyscale. Remove the pin once Ubuntu ships Mesa 26.1.2 or later.
 
 ### Other users
 

@@ -30,6 +30,14 @@ mkdir -p /data/db
 
 mount -t proc proc /proc
 
+# Keep Mesa at 26.0.3: 26.0.8 shows GPU-rendered windows without alpha in
+# greyscale in GPU mode (Zink bug, fixed upstream in 26.1.2)
+cat > /etc/apt/preferences.d/mesa.pref <<'EOF'
+Package: src:mesa
+Pin: version 26.0.3-1ubuntu1
+Pin-Priority: 1001
+EOF
+
 apt-get update -y
 apt-get upgrade -y
 
