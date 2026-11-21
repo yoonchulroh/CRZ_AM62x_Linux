@@ -1,4 +1,4 @@
-# Audio Event Recognition
+# Audio Event Recognition Manual
 
 The audio event recognition feature listens to a USB microphone, recognises sounds such as sirens, alarms and breaking glass with YAMNet, shows them on the LCD and sends an MQTT notification to user devices on the network.
 
@@ -12,7 +12,7 @@ In the converted SDK:
 ./build.sh aer
 ```
 
-This builds the feature and adds it to the image. The first build also downloads and builds TensorFlow Lite and takes a few minutes. Then flash the SD card.
+This builds the feature and adds it to the image. The first build also downloads and builds TensorFlow Lite and takes a few minutes. Steps for building the image and flashing it to SD card remain the same.
 
 To take the feature out of the image again:
 
@@ -81,7 +81,7 @@ sudo aer default
 
 Notes:
 
-- The quantized model scores sounds a little differently; check your thresholds in optimize mode.
+- The quantized model scores sounds a little differently.
 - In optimize mode, other programs on the board share CPU 0 only.
 
 Every inference time is logged, in microseconds, to `/var/log/audio-event/inference_latency.log`.

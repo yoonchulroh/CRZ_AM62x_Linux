@@ -1,4 +1,4 @@
-# How to Test
+# Manual
 
 This repo holds only the changes made on top of an unmodified TI Processor SDK.
 
@@ -16,21 +16,25 @@ This repo holds only the changes made on top of an unmodified TI Processor SDK.
 
 ## 1. Get the baseline SDK
 
-ti-processor-sdk-linux-am62xx-evm-12.01.00.05.03
+Get the stock TI SDK from TI website (https://www.ti.com/tool/ko-kr/PROCESSOR-SDK-AM62X).
+
+Download `ti-processor-sdk-linux-am62xx-evm-12.01.00.05.03-Linux-x86-Install.bin`. This works for both Linux and Linux-RT.
+
+Download the file and execute the installer.
 
 ## 2. Apply
 
+Convert the stock TI SDK for the target CRZ board, by running the following script:
 ```
 ./apply_change.sh /path/to/ti-processor-sdk-linux-am62xx-evm-12.01.00.05.03
 ```
 
-The script sets `TI_SDK_PATH` in the SDK's `Rules.make` to the directory given as its argument, replacing the install path the TI installer wrote there. Apply the changes in the directory you will build from; if the SDK is moved afterwards, update `TI_SDK_PATH` in `Rules.make` to the new location.
-
-This modifies the SDK in place, deletes the parts the CRZ tree does not use (about 9 GB, including `filesystem/` and `board-support/linux-extras-*`), and renames `ti-u-boot-*`, `ti-linux-kernel-*` and `trusted-firmware-a-*` under `board-support/`.
-
+This modifies the SDK in place, deleting the parts the CRZ tree does not use and renaming some directories.
 Keep a copy of the SDK if you need the stock version.
 
-## 3. Build everything
+The script sets `TI_SDK_PATH` in `Rules.make` to the path given. If the SDK is moved later, it needs to be updated manually.
+
+## 3. Build Image
 
 ```
 cd /path/to/ti-processor-sdk-linux-am62xx-evm-12.01.00.05.03
@@ -38,65 +42,68 @@ cd /path/to/ti-processor-sdk-linux-am62xx-evm-12.01.00.05.03
 ```
 
 `all` builds, in order:
+1. U-Boot
+2. Linux kernel
+3. Ubuntu 26.04 root filesystem
 
-1. U-Boot (`tiboot3.bin`, `tispl.bin`, `u-boot.img`)
-2. the Linux kernel, device tree and the BSD101WX1-300 display overlay, plus modules
-3. the Ubuntu 26.04 root filesystem (`image/rootfs.tar.gz`)
+If only a part of the entire build is needed, run `build.sh uboot`, `build.sh kernel`, or `build.sh rootfs`.
 
-The build needs internet access: the rootfs step downloads Ubuntu Base and installs `qemu-user` on the host.
+The build needs internet access for the rootfs step.
 
-The rootfs step asks for your sudo password, then drops you into a shell inside the target root filesystem. Run this there, then `exit` to let the build finish:
-
-```
-./create_ubuntu26.04_arm.sh
-exit
-```
+The rootfs step asks for your sudo password, then drops you into a shell inside the target root filesystem.
+When it asks to run a script, run `./create_ubuntu26.04_arm.sh`.
+It will then ask to select region.
+When it asks to exit, run `exit` to let the build finish.
 
 ## 4. Flash to SD card
 
-Insert the SD card, then run the script from the `image` directory:
+Insert the SD card to the host PC, then run the script from the `image` directory:
 
 ```
 cd image
 sudo ./create-sdcard_ubuntu.sh
 ```
 
-Pick the SD card's device number from the list. **Everything on the selected drive is erased**, so double-check that it is the SD card and not a host disk.
+Pick the SD card's device number from the list. Everything on the selected drive is erased, so double check that the device can be safely erased. 
 
 ## 5. Boot
 
-Put the SD card in the board and watch the UART console:
+Set SW1 on the board to ON-ON-ON-OFF. Put the SD card in the board and toggle the power switch.
 
+You can watch the UART console with:
 ```
 sudo picocom -b 115200 /dev/[UART FILE]
 ```
 
-Log in as `mango` / `mango` (or `root` / `root`).
+Log in as `root` / `root` or `mango` / `mango`.
 
 ## 6. Optional: falcon mode
 
 In falcon mode the R5 SPL boots Linux directly, skipping the A53 SPL and U-Boot proper.
+This can reduce boot time, but removes U-Boot console.
 
+Make the image use falcon mode by running the following command:
 ```
 ./build.sh falcon
 ```
+Flash the SD card as in step 4.
 
 `./build.sh all` (or `./build.sh kernel`) has to be run at least once before building falcon.
-
-Flash the SD card as in step 4.
 
 `./build.sh uboot` then flashing the SD card switches back to normal boot.
 
 ## 7. Optional: install to eMMC
 
-Write an SD card that flashes the eMMC on first root login:
+Write an SD card that flashes the eMMC:
 
 ```
 cd image
 sudo ./make_auto_eMMC_fuse_SD.sh
 ```
+Same as step 4, pick the SD card's device number from the list.
 
-Boot it from SD and log in as `root` on the UART console. The login runs `S99_Fusing_eMMC_FS.sh` to install to eMMC.
+Set SW1 to ON-ON-ON-OFF to boot from SD card.
+Log in as `root` on the UART console. This automatically runs `S99_Fusing_eMMC_FS.sh` to install to eMMC.
 Then power off, remove the SD card, set SW1 to OFF-ON-ON-OFF and power on to boot from eMMC.
 
 ## 8. Optional: RT kernel build
@@ -107,13 +114,15 @@ To build a PREEMPT_RT kernel, run `rt_change.sh` instead of (or after) step 2.
 ./rt_change.sh /path/to/ti-processor-sdk-linux-am62xx-evm-12.01.00.05.03
 ```
 
-This adds TI's RT config fragment to `Rules.make` and renames the `kernel` build target to `kernel-rt` (`./build.sh kernel` then fails with a message).
+Build the kernel with `./build.sh kernel-rt`. `./build.sh kernel` will fail. `./build.sh all` builds the RT kernel too.
 
-Build the kernel with `./build.sh kernel-rt`; `./build.sh all` builds the RT kernel too. On the board, `uname -r` shows `6.18.38-rt`.
+On the board, `uname -r` will show `6.18.38-rt`.
 
 ## 9. Optional: GPU display mode
 
-The image boots in Weston mode: Weston draws the display on the CPU. In GPU mode, labwc draws it on the PowerVR GPU instead. Both are in the root filesystem built in step 3; switch on the board:
+The image boots in Weston mode: Weston draws the display on the CPU. In GPU mode, labwc draws it on the PowerVR GPU instead. Both are in the root filesystem built in step 3.
+
+Switch to GPU display mode on the board:
 
 ```
 sudo display-mode gpu
@@ -125,32 +134,66 @@ What renders where:
 
 | | Weston mode | GPU mode |
 |---|---|---|
-| Compositor (draws the display from all windows) | CPU | GPU |
+| Compositor | CPU | GPU |
 | cairo app | CPU | CPU |
 | GLES 2 app | CPU | GPU |
 | Vulkan app | CPU | GPU |
 
-In Weston mode a Vulkan app can still render on the GPU if it is started with `PVR_I_WANT_A_BROKEN_VULKAN_DRIVER=1`; a GLES app cannot.
-
 To check that the GPU is in use, look for PowerVR in labwc's renderer line:
-
 ```
 journalctl -b -t labwc | grep "GL renderer"
 ```
 
-In GPU mode:
-
-- labwc starts with an empty desktop. Put the commands that start your apps in `~/.config/labwc/autostart`.
-- Apps render on the GPU too: GLES through Mesa's Zink driver (GLES 2.0 only) and Vulkan directly. An app that needs more than GLES 2.0 has to be started with `MESA_LOADER_DRIVER_OVERRIDE` unset; it then renders on the CPU, as in Weston mode.
-- This holds however an app is started. `display-mode gpu` sets the two variables that select the GPU (`MESA_LOADER_DRIVER_OVERRIDE=zink` and `PVR_I_WANT_A_BROKEN_VULKAN_DRIVER=1`) for apps started by labwc, for every user's logins from their next login (`/etc/environment`) and for systemd services from their next start (`/etc/systemd/system.conf.d/gpu-mode.conf`). `display-mode weston` removes them.
-- Weston's own protocols (its on-screen keyboard and text input, `weston-screenshooter`) and `weston.ini` are not available.
-- Mesa marks its PowerVR Vulkan driver, which this mode relies on, as not conformant.
-- Mesa is pinned to Ubuntu's 26.0.3 (`/etc/apt/preferences.d/mesa.pref`): the 26.0.8 update shows GPU-rendered windows without an alpha channel in greyscale. Remove the pin once Ubuntu ships Mesa 26.1.2 or later.
-
 ### Other users
 
-Users other than `mango` can reach the display socket, in either mode, once they are in the `render` group (then log in again):
+Users other than `mango` can reach the display socket, in either mode, once they are in the `render` group (after logging in again):
 
 ```
 sudo usermod -aG render <user>
 ```
+
+## 10. Optional: audio event recognition
+
+Audio event recognition listens to a USB microphone, recognizes sounds such as sirens, alarms and breaking glass, shows them on the LCD and sends MQTT notifications to subscribers. Build it into the image with:
+
+```
+./build.sh aer
+```
+
+Then flash the SD card as in step 4. It is installed but not started; see `aer-README.md` for starting it, configuration, notifications and `aer optimize`.
+
+## 11. Optional: prioritize systemd services
+
+Two scripts lower the average and worst-case latency of chosen systemd services, including custom services:
+
+- `rt-sched` runs a service with real-time scheduling, so it preempts normal tasks.
+- `cpu-partition` reserves CPUs for chosen services and moves every other process and the interrupts to the remaining CPUs.
+
+The scripts are installed with audio event recognition, so build and flash the image with it as in step 10. On the board, audio event recognition must be disabled while you use the scripts for your own services:
+
+```
+sudo aer default
+sudo aer disable
+```
+
+Then apply the scripts to your services:
+
+```
+sudo rt-sched apply my-app.service
+sudo cpu-partition apply my-app.service
+```
+
+By default, `rt-sched` uses SCHED_FIFO priority 50, and `cpu-partition` gives the services CPUs 1-3 and puts everything else on CPU 0. Choose other values with the options:
+
+```
+sudo rt-sched --policy rr --priority 30 apply my-app.service
+sudo cpu-partition --isolated 2-3 --housekeeping 0-1 apply my-app.service
+```
+
+Both restart the services they change, take effect immediately and are kept across reboots.
+
+| Command | Effect |
+|---|---|
+| `rt-sched status`, `cpu-partition status` | show what is applied |
+| `sudo rt-sched remove <service>`, `sudo cpu-partition remove <service>` | undo for one service |
+| `sudo rt-sched reset`, `sudo cpu-partition reset` | undo for all services |

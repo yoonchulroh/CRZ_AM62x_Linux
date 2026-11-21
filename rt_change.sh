@@ -13,7 +13,9 @@
 #   2. build.sh    renames the "kernel" target to "kernel-rt"; "kernel" now
 #                  fails with a message
 #   3. adds board-support/ti-linux-kernel/kernel/configs/crz_rt.config, which
-#      sets CONFIG_LOCALVERSION="-rt" so "uname -r" shows 6.18.38-rt
+#      sets CONFIG_LOCALVERSION="-rt" so "uname -r" shows 6.18.38-rt, and
+#      re-enables CONFIG_CPUSETS (turned off by ti_rt.config) for the
+#      CPU partition of "aer optimize"
 #   4. points TI_SDK_PATH in Rules.make at the given path
 #
 # The RT changes are checked before any of them is made. Re-running on an RT
@@ -157,10 +159,19 @@ patch -s --no-backup-if-mismatch -d "$SDK" -p1 < "$PATCH"
 
 echo "==> adding $RT_CONFIG"
 cat > "$SDK/$RT_CONFIG" <<'EOF_RT_CONFIG'
-# CRZ RT build: tag the kernel release so "uname -r" shows 6.18.38-rt
-# (modules go to /lib/modules/6.18.38-rt). Applied after ti_rt.config via
-# RT_FRAGMENT in Rules.make.
+# CRZ RT build, applied after ti_rt.config via RT_FRAGMENT in Rules.make.
+#
+# Tag the kernel release so "uname -r" shows 6.18.38-rt
+# (modules go to /lib/modules/6.18.38-rt).
 CONFIG_LOCALVERSION="-rt"
+
+# Re-enable the cgroup cpuset controller that ti_rt.config turns off, so
+# "aer optimize" (cpu-partition) can keep the AER services on CPUs 1-3 and
+# everything else on CPU 0. It costs nothing while no cpuset is in use
+# ("aer default"). The other cgroup controllers ti_rt.config disables stay
+# off; CGROUP_SCHED in particular must stay off, or SCHED_FIFO services
+# would need an RT group budget.
+CONFIG_CPUSETS=y
 EOF_RT_CONFIG
 
 echo "==> setting TI_SDK_PATH to $SDK"
