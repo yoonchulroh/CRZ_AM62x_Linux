@@ -12,10 +12,39 @@ fi
 mkdir -p $TARGET_DIR
 sudo tar xvzf $BASE_FILE -C $TARGET_DIR
 sudo cp ./custom_datafs/data/create_ubuntu26.04_arm.sh $TARGET_DIR
-sudo apt-get update -y
-sudo apt-get install -y qemu-user qemu-user-binfmt
-sudo systemctl restart systemd-binfmt
-sudo cp -av /usr/bin/qemu-aarch64 $TARGET_DIR/usr/bin
+
+# The arm64 chroot runs under a statically linked qemu-aarch64: on 22.04/24.04
+# that is qemu-user-static's qemu-aarch64-static, from 25.04 qemu-user's own
+# qemu-aarch64 (qemu-user-static no longer exists there).
+find_static_qemu()
+{
+	for q in /usr/bin/qemu-aarch64-static /usr/bin/qemu-aarch64; do
+		if [ -x "$q" ] && file -L "$q" | grep -q static; then
+			echo "$q"
+			return 0
+		fi
+	done
+	return 1
+}
+
+if ! QEMU=$(find_static_qemu); then
+	sudo apt-get update -y
+	if apt-cache policy qemu-user-static | grep -q 'Candidate: [0-9]'; then
+		sudo apt-get install -y qemu-user-static binfmt-support
+	else
+		sudo apt-get install -y qemu-user qemu-user-binfmt
+	fi
+	QEMU=$(find_static_qemu) || { echo "no static qemu-aarch64 found"; exit 1; }
+fi
+sudo systemctl restart systemd-binfmt 2>/dev/null || true
+if command -v update-binfmts >/dev/null; then
+	sudo update-binfmts --enable qemu-aarch64 2>/dev/null || true
+fi
+
+# Put the binary in the chroot at the path the kernel's binfmt handler names
+QEMU_IN_CHROOT=$(sed -n 's/^interpreter //p' /proc/sys/fs/binfmt_misc/qemu-aarch64 2>/dev/null)
+[ -n "$QEMU_IN_CHROOT" ] || { echo "qemu-aarch64 binfmt handler not registered"; exit 1; }
+sudo cp -v "$QEMU" "$TARGET_DIR$QEMU_IN_CHROOT"
 
 echo "Run ./create_ubuntu26.04_arm.sh"
 
@@ -31,7 +60,7 @@ sudo chmod 755 .
 
 sudo rm -fr var/cache/apt
 sudo rm -f create_ubuntu26.04_arm.sh
-sudo rm -f usr/bin/qemu-aarch64
+sudo rm -f ".$QEMU_IN_CHROOT"
 
 sudo tar cvzf ../rootfs.tar.gz .
 cd ..

@@ -6,6 +6,7 @@ This repo holds only the changes made on top of an unmodified TI Processor SDK.
 
 | Path | What it is |
 |---|---|
+| `setup_host.sh` | One-time install of the host packages needed to apply, build and flash. |
 | `apply_change.sh` | Converts a stock SDK into the am62x_20260918 tree: patches, deletions, directory renames, overlay. |
 | `patches/` | Diffs for stock files that were modified (against stock directory names). |
 | `deleted_files.txt` | Stock files/directories that am62x_20260918 does not have; deleted by the script. |
@@ -13,6 +14,18 @@ This repo holds only the changes made on top of an unmodified TI Processor SDK.
 | `changed_files/` | Full copies of every modified or added file, at their am62x_20260918-relative paths. |
 | `original_files/` | Original versions of `changed_files/` from the stock SDK, or am62x_20230814 where the stock SDK lacks them. |
 | `diffs/` | Per-file diffs between `original_files/` and `changed_files/`. |
+
+## 0. Set up the host
+
+The host PC is assumed to be Ubuntu 22.04 (x86_64).
+
+`setup_host.sh` is a one-time setup script that installs the dependencies.
+It needs sudo and internet access:
+```
+./setup_host.sh
+```
+
+It only has to be run once per host PC.
 
 ## 1. Get the baseline SDK
 
