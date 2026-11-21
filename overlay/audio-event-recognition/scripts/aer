@@ -1,0 +1,100 @@
+#!/bin/sh
+# Control the audio event recognition (AER) services.
+# They are installed but not enabled on a fresh image; enable them here.
+
+UNITS="aer.target aer-broker.service aer-audio-input.service
+aer-preprocess.service aer-framer.service aer-inference.service
+aer-detector.service aer-display.service aer-notify.service"
+# every AER service (UNITS without the target)
+SERVICES=$(echo $UNITS | tr ' ' '\n' | grep '\.service$')
+
+# optimize: drop-in for the inference module (quantized model, mlockall,
+# XNNPACK)
+OPT_DROPIN=/etc/systemd/system/aer-inference.service.d/60-aer-optimize.conf
+QUANT_MODEL=/opt/audio-event/yamnet_quantized.tflite
+
+if [ "$(id -u)" != 0 ] && [ "$1" != status ] && [ "$1" != log ]; then
+	exec sudo "$0" "$@"
+fi
+
+case "$1" in
+enable)
+	# start now and at every boot
+	systemctl enable --now aer.target
+	;;
+disable)
+	# stop now and no longer at boot
+	systemctl disable --now aer.target
+	;;
+start)
+	systemctl start aer.target
+	;;
+stop)
+	systemctl stop aer.target
+	;;
+restart)
+	systemctl stop aer.target
+	systemctl start aer.target
+	;;
+status)
+	systemctl -q is-enabled aer.target 2>/dev/null && echo "enabled at boot" ||
+		echo "disabled at boot"
+	for u in $UNITS; do
+		printf "%-26s %s\n" "$u" "$(systemctl is-active "$u")"
+	done
+	cpu-partition status
+	rt-sched status
+	if [ -f "$OPT_DROPIN" ]; then
+		echo "inference: quantized model, mlockall, XNNPACK"
+	else
+		echo "inference: model from config.ini, no mlockall, built-in kernels"
+	fi
+	pid=$(systemctl show -P MainPID aer-inference.service)
+	if [ "${pid:-0}" != 0 ]; then
+		grep -E "^(VmLck|VmRSS)" "/proc/$pid/status" | sed 's/^/    /'
+	fi
+	;;
+optimize)
+	# Inference with the quantized model through XNNPACK, its memory locked
+	# (mlockall) and SCHED_FIFO. All AER services (inference included) on
+	# CPUs 1-3; every other process and the interrupts on CPU 0.
+	# Immediate and kept across reboots.
+	mkdir -p "${OPT_DROPIN%/*}"
+	printf '%s\n' \
+		'# Created by "aer optimize"; removed by "aer default"' \
+		'[Service]' \
+		"Environment=AER_INFERENCE_MODEL=$QUANT_MODEL" \
+		'Environment=AER_INFERENCE_MLOCKALL=1' \
+		'Environment=AER_INFERENCE_XNNPACK=1' \
+		'LimitMEMLOCK=infinity' > "$OPT_DROPIN"
+	systemctl daemon-reload
+	# both restart aer-inference, which then picks up the drop-in above
+	rt-sched --policy fifo --priority 50 apply aer-inference.service
+	# shellcheck disable=SC2086
+	cpu-partition --isolated 1-3 --housekeeping 0 apply $SERVICES
+	;;
+default)
+	# undo optimize: model from config.ini without mlockall or XNNPACK, any process
+	# and interrupt on any CPU, and normal (SCHED_OTHER) scheduling
+	rm -f "$OPT_DROPIN"
+	rmdir "${OPT_DROPIN%/*}" 2>/dev/null
+	systemctl daemon-reload
+	cpu-partition reset
+	rt-sched reset
+	# in case nothing above restarted it
+	systemctl try-restart aer-inference.service
+	;;
+log)
+	shift
+	[ $# -eq 0 ] && set -- -f
+	exec journalctl -u 'aer*' "$@"
+	;;
+*)
+	echo "usage: $0 enable|disable|start|stop|restart|status|optimize|default|log [journalctl options]"
+	echo "  optimize: inference with quantized model + XNNPACK + mlockall + SCHED_FIFO;"
+	echo "            all AER services on CPUs 1-3, everything else and interrupts on CPU 0"
+	echo "  default:  undo optimize"
+	echo "  config: /opt/audio-event/config.ini (run '$0 restart' after editing)"
+	exit 1
+	;;
+esac

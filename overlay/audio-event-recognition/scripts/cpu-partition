@@ -1,0 +1,378 @@
+#!/bin/sh
+# cpu-partition: split the CPUs between chosen systemd services and the rest.
+#
+#   cpu-partition [--isolated CPUS] [--housekeeping CPUS] apply SERVICE...
+#   cpu-partition remove SERVICE...
+#   cpu-partition reset
+#   cpu-partition status
+#
+# apply   Runs SERVICE(s) in CPU_SLICE, which may use only the isolated CPUs
+#         (default 1-3). Every other top-level cgroup (system.slice,
+#         user.slice, init.scope, ...) is limited to the housekeeping CPUs
+#         (default 0), so all other processes run there. Interrupts and
+#         unbound kernel workqueues are moved to the housekeeping CPUs too.
+#         Takes effect immediately (running SERVICEs are restarted to enter
+#         the slice) and is kept across reboots.
+# remove  Puts SERVICE(s) back in their normal slice. When the last one
+#         leaves, the partition is reset.
+# reset   Undoes everything: no CPU limits on any cgroup, interrupt and
+#         workqueue affinities restored to what they were before apply.
+#
+# Not covered (needs isolcpus/nohz_full on the kernel command line):
+# per-CPU kernel threads and per-CPU interrupts (timer tick, IPIs).
+#
+# State is kept in $STATE_DIR. "cpu-partition boot" (cpu-partition.service)
+# re-applies the interrupt and workqueue part at boot; the cgroup part is
+# persisted by systemd itself.
+
+# no '-' in the name: systemd would nest it under a parent slice
+CPU_SLICE=isolated.slice
+DROPIN_NAME=50-cpu-partition.conf
+STATE_DIR=/var/lib/cpu-partition
+UNIT_DIR=/etc/systemd/system
+BOOT_UNIT=cpu-partition.service
+CGROUP=/sys/fs/cgroup
+WQ_MASK=/sys/devices/virtual/workqueue/cpumask
+
+ISOLATED=1-3
+HOUSEKEEPING=0
+
+die() { echo "cpu-partition: $*" >&2; exit 1; }
+log() { echo "cpu-partition: $*"; }
+
+# "0,2-3" -> "d" (hex CPU mask)
+cpus_to_mask() {
+	mask=0
+	for part in $(echo "$1" | tr ',' ' '); do
+		lo=${part%-*}
+		hi=${part#*-}
+		i=$lo
+		while [ "$i" -le "$hi" ]; do
+			mask=$((mask | (1 << i)))
+			i=$((i + 1))
+		done
+	done
+	printf '%x\n' "$mask"
+}
+
+valid_cpus() {
+	echo "$1" | grep -Eq '^[0-9]+(-[0-9]+)?(,[0-9]+(-[0-9]+)?)*$'
+}
+
+# Active units whose cgroup sits directly under the root (system.slice,
+# user.slice, init.scope, ...), except our slice. Asked from systemd, since
+# cgroup directory names can be escaped ("_cpu.slice").
+top_level_units() {
+	systemctl list-units --type=slice --type=scope --state=active \
+		--plain --no-legend | while read -r u _; do
+		[ "$u" = "$CPU_SLICE" ] && continue
+		[ "$u" = -.slice ] && continue
+		cg=$(systemctl show -P ControlGroup "$u")
+		case "$cg" in
+		/*/*|"") ;;	# nested, or no cgroup
+		*) echo "$u" ;;
+		esac
+	done
+}
+
+service_name() {
+	case "$1" in
+	*.service) echo "$1" ;;
+	*) echo "$1.service" ;;
+	esac
+}
+
+# --- interrupts and workqueues (not persisted by the kernel) -------------
+
+# Interrupt numbers are only valid within one boot: save_originals runs at
+# the first apply and again at each boot before the housekeeping affinities
+# are set (force=1).
+save_originals() {
+	[ "$1" != 1 ] && [ -f "$STATE_DIR/irq.orig" ] && return
+	: > "$STATE_DIR/irq.orig"
+	for d in /proc/irq/[0-9]*; do
+		[ -f "$d/smp_affinity_list" ] || continue
+		echo "${d##*/} $(cat "$d/smp_affinity_list")" >> "$STATE_DIR/irq.orig"
+	done
+	cat /proc/irq/default_smp_affinity > "$STATE_DIR/irq_default.orig"
+	[ -f "$WQ_MASK" ] && cat "$WQ_MASK" > "$STATE_DIR/wq.orig"
+}
+
+# Move every interrupt that can be moved, and future ones, to the
+# housekeeping CPUs. Per-CPU interrupts refuse the write; that is expected.
+apply_irqs() {
+	mask=$(cpus_to_mask "$HOUSEKEEPING")
+	moved=0
+	fixed=0
+	echo "$mask" > /proc/irq/default_smp_affinity
+	for d in /proc/irq/[0-9]*; do
+		[ -f "$d/smp_affinity_list" ] || continue
+		if echo "$HOUSEKEEPING" > "$d/smp_affinity_list" 2>/dev/null; then
+			moved=$((moved + 1))
+		else
+			fixed=$((fixed + 1))
+		fi
+	done
+	[ -f "$WQ_MASK" ] && echo "$mask" > "$WQ_MASK"
+	log "interrupts on CPU $HOUSEKEEPING: $moved moved, $fixed not movable (per-CPU or chained)"
+}
+
+restore_irqs() {
+	default=
+	[ -f "$STATE_DIR/irq_default.orig" ] &&
+		default=$(cat "$STATE_DIR/irq_default.orig")
+	for d in /proc/irq/[0-9]*; do
+		[ -f "$d/smp_affinity_list" ] || continue
+		cpus=$(awk -v n="${d##*/}" '$1 == n { print $2 }' \
+			"$STATE_DIR/irq.orig" 2>/dev/null)
+		if [ -n "$cpus" ]; then
+			echo "$cpus" > "$d/smp_affinity_list" 2>/dev/null
+		elif [ -n "$default" ]; then
+			# created while partitioned: what it would have had
+			echo "$default" > "$d/smp_affinity" 2>/dev/null
+		fi
+	done
+	[ -n "$default" ] && echo "$default" > /proc/irq/default_smp_affinity
+	[ -f "$STATE_DIR/wq.orig" ] && [ -f "$WQ_MASK" ] &&
+		cat "$STATE_DIR/wq.orig" > "$WQ_MASK"
+	log "interrupt and workqueue affinities restored"
+}
+
+# --- cgroups (persisted by systemd) ------------------------------------
+
+write_slice() {
+	cat > "$UNIT_DIR/$CPU_SLICE" <<EOF
+# Created by cpu-partition: CPUs reserved for isolated services
+[Unit]
+Description=CPUs $ISOLATED reserved by cpu-partition
+
+[Slice]
+AllowedCPUs=$ISOLATED
+EOF
+}
+
+# Limit all other top-level cgroups to the housekeeping CPUs. set-property
+# applies immediately and persists in /etc/systemd/system.control.
+limit_others() {
+	: > "$STATE_DIR/housekeeping_units.new"
+	for u in $(top_level_units); do
+		if systemctl set-property "$u" AllowedCPUs="$HOUSEKEEPING"; then
+			echo "$u" >> "$STATE_DIR/housekeeping_units.new"
+		else
+			log "warning: cannot limit $u"
+		fi
+	done
+	# keep units limited earlier that are not running right now
+	[ -f "$STATE_DIR/housekeeping_units" ] &&
+		cat "$STATE_DIR/housekeeping_units" >> "$STATE_DIR/housekeeping_units.new"
+	sort -u "$STATE_DIR/housekeeping_units.new" > "$STATE_DIR/housekeeping_units"
+	rm -f "$STATE_DIR/housekeeping_units.new"
+	log "$(tr '\n' ' ' < "$STATE_DIR/housekeeping_units")-> CPU $HOUSEKEEPING"
+}
+
+unlimit_others() {
+	[ -f "$STATE_DIR/housekeeping_units" ] || return
+	while read -r u; do
+		# empty value: all CPUs again, right now
+		systemctl set-property --runtime "$u" AllowedCPUs= 2>/dev/null
+		# persistent drop-in, and the runtime one of transient units
+		# (init.scope keeps set-property only under /run)
+		for d in /etc/systemd/system.control /run/systemd/system.control \
+			 /run/systemd/transient; do
+			rm -f "$d/$u.d/50-AllowedCPUs.conf"
+			rmdir "$d/$u.d" 2>/dev/null
+		done
+	done < "$STATE_DIR/housekeeping_units"
+	rmdir /etc/systemd/system.control /run/systemd/system.control \
+		2>/dev/null
+	log "CPU limits removed from $(tr '\n' ' ' < "$STATE_DIR/housekeeping_units")"
+}
+
+isolate_service() {
+	svc=$1
+	mkdir -p "$UNIT_DIR/$svc.d"
+	cat > "$UNIT_DIR/$svc.d/$DROPIN_NAME" <<EOF
+# Created by cpu-partition: run on the isolated CPUs
+[Service]
+Slice=$CPU_SLICE
+EOF
+	grep -qx "$svc" "$STATE_DIR/services" 2>/dev/null ||
+		echo "$svc" >> "$STATE_DIR/services"
+}
+
+release_service() {
+	rm -f "$UNIT_DIR/$1.d/$DROPIN_NAME"
+	rmdir "$UNIT_DIR/$1.d" 2>/dev/null
+	[ -f "$STATE_DIR/services" ] &&
+		grep -vx "$1" "$STATE_DIR/services" > "$STATE_DIR/services.new"
+	mv -f "$STATE_DIR/services.new" "$STATE_DIR/services" 2>/dev/null
+}
+
+# Restart running services so they move to their new slice
+restart_services() {
+	for svc in "$@"; do
+		systemctl try-restart "$svc"
+		if systemctl -q is-active "$svc"; then
+			log "$svc in $(systemctl show -P Slice "$svc")"
+		fi
+	done
+}
+
+# --- commands -----------------------------------------------------------
+
+cmd_apply() {
+	[ $# -gt 0 ] || die "apply: no service given"
+	if [ $(( 0x$(cpus_to_mask "$ISOLATED") & 0x$(cpus_to_mask "$HOUSEKEEPING") )) != 0 ]; then
+		die "isolated CPUs $ISOLATED overlap housekeeping CPUs $HOUSEKEEPING"
+	fi
+	mkdir -p "$STATE_DIR"
+	# saved once, so a re-apply (e.g. with another CPU split) keeps the
+	# affinities from before the first apply
+	save_originals
+	printf 'ISOLATED=%s\nHOUSEKEEPING=%s\n' "$ISOLATED" "$HOUSEKEEPING" \
+		> "$STATE_DIR/config"
+
+	svcs=
+	for s in "$@"; do
+		svc=$(service_name "$s")
+		systemctl cat "$svc" >/dev/null 2>&1 || die "no such service: $svc"
+		isolate_service "$svc"
+		svcs="$svcs $svc"
+	done
+	write_slice
+	systemctl daemon-reload
+	# a slice already running keeps its old CPUs until told
+	systemctl -q is-active "$CPU_SLICE" &&
+		systemctl set-property --runtime "$CPU_SLICE" AllowedCPUs="$ISOLATED"
+	limit_others
+	apply_irqs
+	systemctl enable -q "$BOOT_UNIT" 2>/dev/null ||
+		log "warning: $BOOT_UNIT missing, interrupts reset at reboot"
+	# shellcheck disable=SC2086
+	restart_services $svcs
+	log "applied: CPU $ISOLATED for $(paste -sd' ' "$STATE_DIR/services"),"\
+" CPU $HOUSEKEEPING for everything else"
+}
+
+cmd_reset() {
+	if [ ! -d "$STATE_DIR" ]; then
+		log "no partition applied"
+		return
+	fi
+	svcs=
+	if [ -f "$STATE_DIR/services" ]; then
+		svcs=$(cat "$STATE_DIR/services")
+		for svc in $svcs; do
+			rm -f "$UNIT_DIR/$svc.d/$DROPIN_NAME"
+			rmdir "$UNIT_DIR/$svc.d" 2>/dev/null
+		done
+	fi
+	unlimit_others
+	systemctl disable -q "$BOOT_UNIT" 2>/dev/null
+	rm -f "$UNIT_DIR/$CPU_SLICE"
+	systemctl daemon-reload
+	# shellcheck disable=SC2086
+	restart_services $svcs
+	systemctl stop "$CPU_SLICE" 2>/dev/null
+	restore_irqs
+	rm -rf "$STATE_DIR" /run/cpu-partition.booted
+	log "reset: no CPU partition"
+}
+
+cmd_remove() {
+	[ $# -gt 0 ] || die "remove: no service given"
+	[ -f "$STATE_DIR/services" ] || die "no partition applied"
+	svcs=
+	for s in "$@"; do
+		svc=$(service_name "$s")
+		release_service "$svc"
+		svcs="$svcs $svc"
+	done
+	if [ ! -s "$STATE_DIR/services" ]; then
+		log "no isolated service left"
+		cmd_reset
+		return
+	fi
+	systemctl daemon-reload
+	# shellcheck disable=SC2086
+	restart_services $svcs
+}
+
+# At boot: what systemd does not persist. Interrupts and workqueues, and the
+# CPU limit of transient top-level units such as init.scope (PID 1).
+cmd_boot() {
+	[ -f "$STATE_DIR/config" ] || exit 0
+	. "$STATE_DIR/config"
+	# once per boot: this boot's interrupt numbers and driver affinities
+	if [ ! -e /run/cpu-partition.booted ]; then
+		save_originals 1
+		touch /run/cpu-partition.booted
+	fi
+	limit_others
+	apply_irqs
+}
+
+cmd_status() {
+	if [ ! -f "$STATE_DIR/config" ]; then
+		echo "CPU partition: none (all processes and interrupts on any CPU)"
+		return
+	fi
+	. "$STATE_DIR/config"
+	echo "CPU partition: CPU $ISOLATED isolated, CPU $HOUSEKEEPING for everything else"
+	echo "  isolated services:"
+	while read -r svc; do
+		pid=$(systemctl show -P MainPID "$svc")
+		cpus=-
+		[ "${pid:-0}" != 0 ] &&
+			cpus=$(sed -n 's/^Cpus_allowed_list:\t*//p' "/proc/$pid/status")
+		printf '    %-28s %-10s allowed CPUs %s\n' "$svc" \
+			"$(systemctl is-active "$svc")" "$cpus"
+	done < "$STATE_DIR/services"
+	echo "  housekeeping cgroups:"
+	while read -r u; do
+		printf '    %-28s cpuset %s\n' "$u" \
+			"$(cat "$CGROUP/$u/cpuset.cpus.effective" 2>/dev/null || echo -)"
+	done < "$STATE_DIR/housekeeping_units"
+	echo "  default interrupt affinity: $(cat /proc/irq/default_smp_affinity)"
+}
+
+# --- main ---------------------------------------------------------------
+
+while [ $# -gt 0 ]; do
+	case "$1" in
+	--isolated)
+		valid_cpus "$2" || die "bad CPU list: $2"
+		ISOLATED=$2
+		shift 2
+		;;
+	--housekeeping)
+		valid_cpus "$2" || die "bad CPU list: $2"
+		HOUSEKEEPING=$2
+		shift 2
+		;;
+	*)
+		break
+		;;
+	esac
+done
+
+cmd=$1
+[ $# -gt 0 ] && shift
+case "$cmd" in
+status)
+	cmd_status
+	exit 0
+	;;
+esac
+[ "$(id -u)" = 0 ] || die "must be run as root"
+case "$cmd" in
+apply)  cmd_apply "$@" ;;
+remove) cmd_remove "$@" ;;
+reset)  cmd_reset ;;
+boot)   cmd_boot ;;
+*)
+	echo "usage: $0 [--isolated CPUS] [--housekeeping CPUS] apply SERVICE..."
+	echo "       $0 remove SERVICE... | reset | status"
+	exit 1
+	;;
+esac

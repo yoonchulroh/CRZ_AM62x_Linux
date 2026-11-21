@@ -103,7 +103,7 @@ cat > "$PATCH" <<'EOF_RT_PATCH'
  #platform
 --- a/build.sh
 +++ b/build.sh
-@@ -6,7 +6,7 @@
+@@ -9,7 +9,7 @@
  
  START_TIME=`date +%s`
  
@@ -112,7 +112,7 @@ cat > "$PATCH" <<'EOF_RT_PATCH'
  # fitImage the R5 SPL loads. U-Boot proper is skipped, so the display overlay
  # it would apply (name_overlays) is merged into the DTB here instead. The DTB
  # carries no bootargs: the R5 SPL generates them with root=PARTUUID of the
-@@ -18,7 +18,7 @@
+@@ -21,7 +21,7 @@
  	for f in $BOOT_DIR/Image $BOOT_DIR/dtb/ti/k3-am625-sk.dtb \
  		 $BOOT_DIR/dtb/ti/k3-am625-sk-bsd101wx1-300.dtbo ; do
  		if [ ! -f $f ] ; then
@@ -121,7 +121,7 @@ cat > "$PATCH" <<'EOF_RT_PATCH'
  			exit 1
  		fi
  	done
-@@ -89,7 +89,7 @@
+@@ -119,7 +119,7 @@
  	cd ..
  	rm -fr ./image_temp
  	;;
@@ -130,7 +130,7 @@ cat > "$PATCH" <<'EOF_RT_PATCH'
  	mkdir -p $MODULES_DIR
  	mkdir image_temp
  	make linux
-@@ -115,6 +115,11 @@
+@@ -145,6 +145,11 @@
  	cd ..
  	rm -fr image_temp
  	;;
@@ -153,7 +153,7 @@ patch --dry-run -s -d "$SDK" -p1 < "$PATCH" ||
 ###############################################################################
 
 echo "==> patching Rules.make and build.sh"
-patch -s -d "$SDK" -p1 < "$PATCH"
+patch -s --no-backup-if-mismatch -d "$SDK" -p1 < "$PATCH"
 
 echo "==> adding $RT_CONFIG"
 cat > "$SDK/$RT_CONFIG" <<'EOF_RT_CONFIG'

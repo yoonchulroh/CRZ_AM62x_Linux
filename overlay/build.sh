@@ -3,6 +3,9 @@
 IMAGE_DIR=./image/custom_datafs/boot-images
 MODULES_DIR=./image/custom_datafs/usr/lib/
 BOOT_DIR=./image/custom_datafs/boot
+# audio event recognition: sources, and the staging tree it installs into
+AER_DIR=./audio-event-recognition
+DATAFS_DIR=$PWD/image/custom_datafs
 
 START_TIME=`date +%s`
 
@@ -42,6 +45,33 @@ case "$1" in
 clean)
 	make linux_clean u-boot_clean tfa-falcon_clean
 	rm -f $BOOT_DIR/tifalcon.bin $BOOT_DIR/fitImage
+	make -C $AER_DIR clean
+	;;
+aer)
+	# Audio event recognition: modules in /opt/audio-event (with config.ini
+	# and the YAMNet model), systemd units and the "aer" control script.
+	# The services are not enabled; run "sudo aer enable" on the board.
+	# The first build also cross-compiles the TensorFlow Lite C library
+	# (downloads the TensorFlow source; needs internet).
+	make -C $AER_DIR
+    if [ $? != 0 ] ; then
+	    exit 1
+    fi
+	# drop files of an older install that the new one no longer has
+	make -C $AER_DIR uninstall DESTDIR=$DATAFS_DIR
+	make -C $AER_DIR install DESTDIR=$DATAFS_DIR
+    if [ $? != 0 ] ; then
+	    exit 1
+    fi
+	cd ./image
+	./custom_datafs_make.sh
+	cd ..
+	;;
+aer-remove)
+	make -C $AER_DIR uninstall DESTDIR=$DATAFS_DIR
+	cd ./image
+	./custom_datafs_make.sh
+	cd ..
 	;;
 uboot)
 	mkdir -p $IMAGE_DIR

@@ -1,0 +1,8 @@
+[Unit]
+Description=Audio event recognition (all modules)
+Wants=aer-broker.service aer-audio-input.service aer-preprocess.service
+Wants=aer-framer.service aer-inference.service aer-detector.service
+Wants=aer-display.service aer-notify.service
+
+[Install]
+WantedBy=multi-user.target

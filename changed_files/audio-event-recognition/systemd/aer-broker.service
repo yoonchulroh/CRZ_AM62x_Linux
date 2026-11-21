@@ -1,0 +1,17 @@
+[Unit]
+Description=Audio event recognition: MQTT broker
+PartOf=aer.target
+# keep retrying (e.g. display waiting for the compositor)
+StartLimitIntervalSec=0
+After=network.target
+
+[Service]
+Type=simple
+User=mango
+Group=mango
+ExecStart=/opt/audio-event/bin/aer-broker -c /opt/audio-event/config.ini
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=aer.target

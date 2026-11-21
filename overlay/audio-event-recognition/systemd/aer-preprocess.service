@@ -1,0 +1,21 @@
+[Unit]
+Description=Audio event recognition: preprocessing (mono, 16 kHz)
+PartOf=aer.target
+# keep retrying (e.g. display waiting for the compositor)
+StartLimitIntervalSec=0
+After=aer-audio-input.service
+
+[Service]
+Type=simple
+User=mango
+Group=mango
+Nice=-5
+RuntimeDirectory=audio-event
+RuntimeDirectoryMode=0770
+RuntimeDirectoryPreserve=yes
+ExecStart=/opt/audio-event/bin/aer-preprocess -c /opt/audio-event/config.ini
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=aer.target

@@ -1,0 +1,24 @@
+[Unit]
+Description=Audio event recognition: YAMNet inference (TensorFlow Lite)
+PartOf=aer.target
+# keep retrying (e.g. display waiting for the compositor)
+StartLimitIntervalSec=0
+After=aer-framer.service
+
+[Service]
+Type=simple
+User=mango
+Group=mango
+# leave CPU time for audio and the display
+Nice=5
+# /var/log/audio-event for inference_latency.log, owned by the service user
+LogsDirectory=audio-event
+RuntimeDirectory=audio-event
+RuntimeDirectoryMode=0770
+RuntimeDirectoryPreserve=yes
+ExecStart=/opt/audio-event/bin/aer-inference -c /opt/audio-event/config.ini
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=aer.target

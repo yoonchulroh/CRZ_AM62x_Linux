@@ -123,7 +123,7 @@ done
 echo "==> applying patches"
 for p in "$HERE"/patches/*.patch; do
 	echo "    $(basename "$p")"
-	patch -s -d "$SDK" -p1 < "$p"
+	patch -s --no-backup-if-mismatch -d "$SDK" -p1 < "$p"
 done
 
 echo "==> deleting files not in am62x_20260918"

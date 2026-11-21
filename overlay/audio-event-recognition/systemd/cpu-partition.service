@@ -1,0 +1,15 @@
+[Unit]
+Description=Re-apply cpu-partition interrupt and workqueue affinities
+# the cgroup part of the partition is persisted by systemd itself; the
+# kernel forgets interrupt affinities at reboot
+ConditionPathExists=/var/lib/cpu-partition/config
+# after drivers (e.g. Ethernet, which spreads its queue interrupts) are up
+After=systemd-modules-load.service systemd-udev-trigger.service network.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/bin/cpu-partition boot
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,164 @@
+#!/bin/sh
+# rt-sched: run systemd services with a real-time scheduling policy.
+#
+#   rt-sched [--policy fifo|rr] [--priority 1-99] apply SERVICE...
+#   rt-sched remove SERVICE...
+#   rt-sched reset
+#   rt-sched status
+#
+# apply   Adds a drop-in with CPUSchedulingPolicy/CPUSchedulingPriority
+#         (default SCHED_FIFO, priority 50) to each SERVICE and restarts it
+#         if running, so it takes effect immediately and at every boot.
+#         systemd sets the policy before dropping privileges, and threads the
+#         service creates inherit it.
+# remove  Takes the drop-in away from SERVICE(s); they go back to their own
+#         scheduling settings (normally SCHED_OTHER).
+# reset   remove for every service rt-sched has changed.
+#
+# The services are found by their drop-in file, so no other state is kept.
+
+DROPIN_NAME=50-rt-sched.conf
+UNIT_DIR=/etc/systemd/system
+
+POLICY=fifo
+PRIORITY=50
+
+die() { echo "rt-sched: $*" >&2; exit 1; }
+log() { echo "rt-sched: $*"; }
+
+service_name() {
+	case "$1" in
+	*.service) echo "$1" ;;
+	*) echo "$1.service" ;;
+	esac
+}
+
+# Services that have our drop-in
+managed_services() {
+	for f in "$UNIT_DIR"/*.service.d/"$DROPIN_NAME"; do
+		[ -f "$f" ] || continue
+		d=${f%/*}
+		basename "$d" .d
+	done
+}
+
+# Policy of every thread of a running service, e.g. "FF 50 x3"
+thread_policies() {
+	pid=$(systemctl show -P MainPID "$1")
+	[ "${pid:-0}" != 0 ] || { echo "-"; return; }
+	ps -L -o cls=,rtprio= -p "$pid" | awk '{ print $1, $2 }' | sort |
+		uniq -c | awk '{ printf "%s%s %s x%d", (NR > 1 ? ", " : ""), $2, $3, $1 }'
+	echo
+}
+
+restart_services() {
+	for svc in "$@"; do
+		systemctl try-restart "$svc"
+		systemctl -q is-active "$svc" &&
+			log "$svc threads: $(thread_policies "$svc")"
+	done
+}
+
+cmd_apply() {
+	[ $# -gt 0 ] || die "apply: no service given"
+	svcs=
+	for s in "$@"; do
+		svc=$(service_name "$s")
+		systemctl cat "$svc" >/dev/null 2>&1 || die "no such service: $svc"
+		mkdir -p "$UNIT_DIR/$svc.d"
+		cat > "$UNIT_DIR/$svc.d/$DROPIN_NAME" <<EOF
+# Created by rt-sched: real-time scheduling
+[Service]
+CPUSchedulingPolicy=$POLICY
+CPUSchedulingPriority=$PRIORITY
+EOF
+		svcs="$svcs $svc"
+	done
+	systemctl daemon-reload
+	# shellcheck disable=SC2086
+	restart_services $svcs
+	log "applied: SCHED_$(echo "$POLICY" | tr a-z A-Z) priority $PRIORITY for$svcs"
+}
+
+cmd_remove() {
+	[ $# -gt 0 ] || die "remove: no service given"
+	svcs=
+	for s in "$@"; do
+		svc=$(service_name "$s")
+		rm -f "$UNIT_DIR/$svc.d/$DROPIN_NAME"
+		rmdir "$UNIT_DIR/$svc.d" 2>/dev/null
+		svcs="$svcs $svc"
+	done
+	systemctl daemon-reload
+	# shellcheck disable=SC2086
+	restart_services $svcs
+	log "removed real-time scheduling from$svcs"
+}
+
+cmd_reset() {
+	svcs=$(managed_services)
+	if [ -z "$svcs" ]; then
+		log "no service with real-time scheduling"
+		return
+	fi
+	# shellcheck disable=SC2086
+	cmd_remove $svcs
+}
+
+cmd_status() {
+	svcs=$(managed_services)
+	if [ -z "$svcs" ]; then
+		echo "real-time scheduling: none"
+		return
+	fi
+	echo "real-time scheduling:"
+	for svc in $svcs; do
+		printf '    %-28s %s, threads: %s\n' "$svc" \
+			"$(sed -n 's/^CPUScheduling\(.*\)=/\1 /p' \
+			  "$UNIT_DIR/$svc.d/$DROPIN_NAME" | paste -sd' ')" \
+			"$(thread_policies "$svc")"
+	done
+}
+
+while [ $# -gt 0 ]; do
+	case "$1" in
+	--policy)
+		case "$2" in
+		fifo|rr) POLICY=$2 ;;
+		*) die "policy must be fifo or rr" ;;
+		esac
+		shift 2
+		;;
+	--priority)
+		case "$2" in
+		''|*[!0-9]*) die "bad priority: $2" ;;
+		esac
+		[ "$2" -ge 1 ] && [ "$2" -le 99 ] || die "priority must be 1-99"
+		PRIORITY=$2
+		shift 2
+		;;
+	*)
+		break
+		;;
+	esac
+done
+
+cmd=$1
+[ $# -gt 0 ] && shift
+case "$cmd" in
+status)
+	cmd_status
+	exit 0
+	;;
+esac
+[ "$(id -u)" = 0 ] || die "must be run as root"
+case "$cmd" in
+apply)  cmd_apply "$@" ;;
+remove) cmd_remove "$@" ;;
+reset)  cmd_reset ;;
+*)
+	echo "usage: $0 [--policy fifo|rr] [--priority 1-99] apply SERVICE..."
+	echo "       $0 remove SERVICE... | reset | status"
+	exit 1
+	;;
+esac

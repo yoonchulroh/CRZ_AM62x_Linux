@@ -1,0 +1,22 @@
+[Unit]
+Description=Audio event recognition: LCD display
+PartOf=aer.target
+# keep retrying (e.g. display waiting for the compositor)
+StartLimitIntervalSec=0
+After=aer-detector.service weston.service labwc.service
+
+[Service]
+Type=simple
+User=mango
+Group=mango
+SupplementaryGroups=render
+Environment=WAYLAND_DISPLAY=/run/wayland/wayland-0
+RuntimeDirectory=audio-event
+RuntimeDirectoryMode=0770
+RuntimeDirectoryPreserve=yes
+ExecStart=/opt/audio-event/bin/aer-display -c /opt/audio-event/config.ini
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=aer.target

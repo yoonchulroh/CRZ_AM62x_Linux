@@ -1,0 +1,20 @@
+[Unit]
+Description=Audio event recognition: event detection
+PartOf=aer.target
+# keep retrying (e.g. display waiting for the compositor)
+StartLimitIntervalSec=0
+After=aer-inference.service
+
+[Service]
+Type=simple
+User=mango
+Group=mango
+RuntimeDirectory=audio-event
+RuntimeDirectoryMode=0770
+RuntimeDirectoryPreserve=yes
+ExecStart=/opt/audio-event/bin/aer-detector -c /opt/audio-event/config.ini
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=aer.target

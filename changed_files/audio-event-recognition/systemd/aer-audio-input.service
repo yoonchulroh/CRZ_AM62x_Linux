@@ -1,0 +1,23 @@
+[Unit]
+Description=Audio event recognition: audio input (USB mic)
+PartOf=aer.target
+# keep retrying (e.g. display waiting for the compositor)
+StartLimitIntervalSec=0
+After=sound.target
+
+[Service]
+Type=simple
+User=mango
+Group=mango
+SupplementaryGroups=audio
+# keep up with the mic even when inference is busy
+Nice=-10
+RuntimeDirectory=audio-event
+RuntimeDirectoryMode=0770
+RuntimeDirectoryPreserve=yes
+ExecStart=/opt/audio-event/bin/aer-audio-input -c /opt/audio-event/config.ini
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=aer.target
