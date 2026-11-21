@@ -12,8 +12,6 @@ EXEC_DIR?=__EXEC_DIR__
 # Root of the boot partition to install boot binaries
 BOOTFS?=__BOOTFS__
 
-MAKE_JOBS?=1
-
 ### TI SDK CONFIG ###
 #Points to the root of the TI SDK
 export TI_SDK_PATH?=/home/yoonchulroh/CRZ/am62x_20260918

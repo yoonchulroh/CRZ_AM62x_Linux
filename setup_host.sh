@@ -71,7 +71,7 @@ PKGS_BUILD="
 	libncurses-dev pkg-config
 	device-tree-compiler
 	python3 python3-dev python3-setuptools
-	python3-pyelftools python3-yaml python3-jsonschema
+	python3-pyelftools python3-yaml python3-jsonschema yamllint
 	swig
 	cpio kmod rsync
 "
@@ -133,8 +133,8 @@ for c in patch make gcc bc bison flex swig fdtoverlay openssl cpio \
 	DESC=$c check command -v $c
 done
 
-DESC="python3 modules (elftools, yaml, jsonschema)" \
-	check python3 -c 'import elftools, yaml, jsonschema'
+DESC="python3 modules (elftools, yaml, jsonschema, yamllint)" \
+	check python3 -c 'import elftools, yaml, jsonschema, yamllint'
 
 QEMU=/usr/bin/qemu-aarch64
 [ -x /usr/bin/qemu-aarch64-static ] && QEMU=/usr/bin/qemu-aarch64-static

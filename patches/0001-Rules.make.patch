@@ -6,27 +6,32 @@
 -DESTDIR?=__DESTDIR__
 -
  # Root of the boot partition to install boot binaries
-@@ -23,2 +20,5 @@
+@@ -17,4 +14,2 @@
+ 
+-MAKE_JOBS?=1
+-
+ ### TI SDK CONFIG ###
+@@ -23,2 +18,5 @@
  
 +#root of the target file system for installing applications
 +DESTDIR?=${TI_SDK_PATH}/image_temp
 +
  export LINUX_DEVKIT_PATH=$(TI_SDK_PATH)/linux-devkit
-@@ -29,3 +29,2 @@
+@@ -29,3 +27,2 @@
  # The source directories for each component
 -ARM_BENCHMARKS_SRC_DIR:=$(shell ls -d $(TI_SDK_PATH)/example-applications/*arm-benchmarks*)
  CRYPTODEV_SRC_DIR:=$(shell ls -d $(TI_SDK_PATH)/board-support/extra-drivers/cryptodev*)
-@@ -34,3 +33,2 @@
+@@ -34,3 +31,2 @@
  LINUXKERNEL_INSTALL_DIR:=$(shell ls -d $(TI_SDK_PATH)/board-support/ti-linux-kernel*)
 -TFA_SRC_DIR:=$(shell ls -d $(TI_SDK_PATH)/board-support/trusted-firmware-a*)
  
-@@ -52,2 +50,5 @@
+@@ -52,2 +48,5 @@
  
 +# Host tools built by u-boot (mkimage is used to build the kernel fitImage)
 +export PATH:=$(TI_SDK_PATH)/board-support/u-boot-build/a53/tools:$(PATH)
 +
  #Default CC value to be used when cross compiling.  This is so that the
-@@ -83,4 +84,4 @@
+@@ -83,4 +82,4 @@
  
 -MAKE_ALL_TARGETS?= arm-benchmarks cryptodev u-boot u-boot-snagboot linux linux-dtbs ti-img-rogue-driver jailhouse linux-extras linux-extras-dtbs u-boot-extras
 +MAKE_ALL_TARGETS?= u-boot linux linux-dtbs
